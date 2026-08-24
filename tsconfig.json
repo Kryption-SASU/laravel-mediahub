@@ -15,5 +15,5 @@
         "resolveJsonModule": true,
         "isolatedModules": true
     },
-    "include": ["resources/js/**/*.ts", "vitest.config.ts"]
+    "include": ["resources/js/**/*.ts", "resources/js/**/*.vue", "vitest.config.ts"]
 }

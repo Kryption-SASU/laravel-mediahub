@@ -1,6 +1,6 @@
 # The browser side
 
-Two layers, and no components yet.
+Three layers, and the components are being built from the ground up.
 
 - **Layer 1 — the core.** A typed client for the HTTP API and an upload queue. Plain TypeScript,
   no framework. It exists so an Angular, Svelte or vanilla application can use this package
@@ -8,10 +8,108 @@ Two layers, and no components yet.
   way.
 - **Layer 2 — the composables.** Vue 3 state and operations: browsing, selection, uploading,
   actions, quota, picking. Nothing renders.
+- **Layer 3 — the components.** Vue 3 with **frozen markup** and an appearance settable entirely
+  from the outside. So far: the provider, and the primitives every screen is made of.
 
-Components come next. Until then, the browser side is a foundation you build your own interface
-on — which is the point: layer 2 is written so that writing an entirely different interface is a
-day's work, and there is [a test that says so](../resources/js/vue/acceptance.test.ts).
+Layer 2 is written so that building an entirely different interface is a day's work, and there is
+[a test that says so](../resources/js/vue/acceptance.test.ts). That is the supported way to get a
+screen we did not write — not patching the components below.
+
+## Why the components cannot be published and edited
+
+⚠️ **The markup is the contract.** A view that can be forked is a view that gets forked, and from
+that day the package cannot change anything without breaking the copy. That is not a hypothesis;
+it is the story that made this package necessary.
+
+The trade is that **everything about the appearance is reachable from the outside**, with no
+recompilation and without touching a line of the package. Three levers, in the order you will
+need them.
+
+### Lever 1 — the tokens
+
+Nine custom properties cover the ordinary case. One line at the host, no build at all:
+
+```css
+@import "../vendor/kryption/laravel-mediahub/resources/css/mediahub.css";
+
+:root {
+    --mh-color-accent: var(--brand-primary);
+    --mh-radius: 0.75rem;
+}
+```
+
+Dark mode is a set of tokens, not a second stylesheet. It follows `prefers-color-scheme`, and
+`data-mh-theme="dark"` or `"light"` on the root overrides it — an application with its own switch
+must be obeyed, otherwise this library stays bright inside a dark page and reads as something that
+failed to load.
+
+⚠️ **No preflight is imported.** Resetting your styles from a dependency would be a fault: you
+installed a media library, not a new baseline for your application.
+
+⚠️ **Tailwind v4 does not scan dependencies.** Consuming the sources, add one line, or every class
+in the theme is removed from your build — which looks like a broken package rather than a missing
+directive:
+
+```css
+@source "../vendor/kryption/laravel-mediahub/resources/js";
+```
+
+### Lever 2 — the class table
+
+Each component reads its classes from a table, and each place in it has two halves:
+
+```ts
+thumbnail: {
+    root: { layout: 'relative block shrink-0 overflow-hidden', class: 'rounded-md bg-…' },
+}
+```
+
+`layout` is structure and belongs to the markup contract. `class` is the skin, and **yours
+replaces ours outright** — never merged, so there is never a question of which utility wins. An
+empty string removes the skin entirely.
+
+```ts
+app.use(createMediaHub({ client, theme: { thumbnail: { root: { class: 'rounded-none' } } } }))
+```
+
+The nearest word wins: **default, then your theme, then the `ui` prop** on a single component.
+
+```vue
+<MhThumbnail :media="media" :ui="{ root: { class: 'ring-2 ring-brand' } }" />
+```
+
+⚠️ **No class is ever written into a template**, and [a test reads the sources to keep it that
+way](../resources/js/components/no-hardcoded-classes.test.ts). One class typed in during a busy
+afternoon is a piece of appearance nobody can reach — and the only remaining option would be to
+fork the component.
+
+### Lever 3 — the slots
+
+A small number of named, documented slots. They **inject content; they do not restructure**.
+Adding one is a minor version, removing one is a major.
+
+## Getting the components
+
+```ts
+import { createMediaHub, MhThumbnail } from '@mediahub/components'
+
+app.use(createMediaHub({ client }))
+```
+
+Or, for one screen only — or for two libraries side by side:
+
+```vue
+<MhProvider :client="client" :theme="theme">
+    <!-- … -->
+</MhProvider>
+```
+
+`MhProvider` renders **no element of its own**: a wrapper `<div>` would change the layout of
+whatever it is dropped into. ⚠️ The client is taken once, at mount — swapping it afterwards has no
+effect, so key the provider on your tenant if it changes.
+
+The theme, on the other hand, is reactive: `createMediaHub(...).setTheme(…)` changes the skin of
+everything already on screen, which is what a runtime dark mode needs.
 
 ## Getting hold of it
 

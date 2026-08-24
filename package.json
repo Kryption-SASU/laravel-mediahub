@@ -7,12 +7,14 @@
     "license": "Apache-2.0",
     "exports": {
         "./client": "./resources/js/client/index.ts",
-        "./vue": "./resources/js/vue/index.ts"
+        "./vue": "./resources/js/vue/index.ts",
+        "./components": "./resources/js/components/index.ts",
+        "./css": "./resources/css/mediahub.css"
     },
     "scripts": {
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
-        "types": "tsc --noEmit"
+        "types": "vue-tsc --noEmit"
     },
     "peerDependencies": {
         "vue": "^3.4"
@@ -24,9 +26,13 @@
     },
     "devDependencies": {
         "@types/node": "^22.20.1",
+        "@vitejs/plugin-vue": "^6.0.8",
         "@vitest/coverage-v8": "^4.1.11",
-        "typescript": "^7.0.2",
+        "@vue/test-utils": "^2.4.11",
+        "happy-dom": "^20.11.6",
+        "typescript": "^5.9.3",
         "vitest": "^4.1.11",
-        "vue": "^3.5.41"
+        "vue": "^3.5.41",
+        "vue-tsc": "^3.3.11"
     }
 }
