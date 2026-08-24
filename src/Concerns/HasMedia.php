@@ -7,6 +7,7 @@ namespace Kryption\MediaHub\Concerns;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Kryption\MediaHub\Actions\UploadMedia;
+use Kryption\MediaHub\Contracts\RemoteFetcher;
 use Kryption\MediaHub\Jobs\GenerateConversionsJob;
 use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\UploadValidator;
@@ -168,6 +169,76 @@ trait HasMedia
         }
 
         return $this->addExistingMedia(app(UploadMedia::class)($payload, $context), $collection);
+    }
+
+    /**
+     * FETCH A URL, THEN ATTACH WHAT CAME BACK.
+     *
+     * ⚠️ OFF UNLESS THE HOST TURNED IT ON. Fetching an address somebody else chose is a
+     * request-forgery primitive, and an installation that never uses it should not carry its
+     * risk. The switch is read here rather than in the container, so the refusal names the
+     * setting instead of failing to build an object.
+     *
+     * ⚠️ AND WHAT COMES BACK IS TREATED AS AN UPLOAD, not as something trusted. The same
+     * validation runs on the real bytes, the same quota is counted, the same naming and
+     * deduplication apply: a remote server does not get to decide what its file is by saying so
+     * in a header.
+     *
+     * ⚠️ THE TEMPORARY FILE IS REMOVED WHATEVER HAPPENS. A refused type, a full quota, a
+     * collection that says no: every one of those leaves bytes behind if the cleanup only runs
+     * on the happy path, and nothing ever comes back to sweep them.
+     */
+    public function addMediaFromUrl(
+        string $url,
+        string $collection = self::DEFAULT_MEDIA_COLLECTION,
+        ?string $name = null,
+    ): Media {
+        if (! (bool) config('mediahub.remote.enabled', false)) {
+            throw OperationRejected::because(
+                'remote_disabled',
+                'Fetching files from a URL is turned off.',
+            );
+        }
+
+        $named = $name ?? $this->nameFromUrl($url);
+
+        /*
+         * ⚠️ REFUSED HERE, WITH A REASON THAT SAYS WHAT TO DO. A URL ending in a slash names no
+         * file, and inventing one without an extension gets it rejected further down as
+         * `extension_not_allowed` — which reads as "that image is invalid" when the truth is
+         * "that address does not say what the file is called".
+         */
+        if ($named === null) {
+            throw OperationRejected::because(
+                'remote_unnamed',
+                'That address does not name a file. Give it a name.',
+            );
+        }
+
+        $path = app(RemoteFetcher::class)->fetch($url);
+
+        try {
+            return $this->addMedia(UploadedPayload::fromLocalFile($path, $named), $collection);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * ⚠️ IT ANSWERS `null` RATHER THAN INVENTING SOMETHING. A name with no extension is refused
+     * by the upload validator for a reason that has nothing to do with the real problem, and the
+     * caller is left reading about extensions when what is missing is a file name.
+     */
+    private function nameFromUrl(string $url): ?string
+    {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $name = basename($path);
+
+        if ($name === '' || $name === '/' || ! str_contains($name, '.')) {
+            return null;
+        }
+
+        return $name;
     }
 
     /**
