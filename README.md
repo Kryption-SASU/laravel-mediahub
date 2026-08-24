@@ -198,6 +198,10 @@ models pointing at the same media, and the original is never touched.
 Every point of contact is a contract with a working default. Bind only what you need — **your
 binding always wins**, whatever the order service providers boot in.
 
+⚠️ **The code you write to do that lives in your application, never in this package** — it is
+called the glue, and it is usually fifteen lines. [How to write it](docs/fitting.md), with a complete
+worked example and the one default that is dangerous to leave alone.
+
 | Contract | What it decides | Default |
 |---|---|---|
 | `MediaScope` | what partitions the library | no scoping |
@@ -377,6 +381,7 @@ including that one. The contract says so.
 
 - [Installation](docs/installation.md)
 - [Usage](docs/usage.md)
+- [Fitting it to your application](docs/fitting.md)
 - [The browser side](docs/browser.md)
 - [Getting the browser side into your application](docs/delivery.md)
 - [Contributing](CONTRIBUTING.md)
