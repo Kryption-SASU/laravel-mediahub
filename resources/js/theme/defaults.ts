@@ -279,4 +279,186 @@ export const defaultTheme: MhTheme = {
             class: 'bg-[var(--mh-color-accent)] text-[var(--mh-color-accent-foreground)]',
         },
     },
+
+    selectionBar: {
+        root: {
+            layout: 'flex flex-wrap items-center gap-3 p-3',
+            class: 'rounded-md bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+        count: {
+            layout: 'text-sm font-semibold',
+            class: '',
+        },
+        actions: {
+            layout: 'flex flex-wrap items-center gap-2',
+            class: '',
+        },
+        action: {
+            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            class: 'bg-[var(--mh-color-accent)] text-[var(--mh-color-accent-foreground)]',
+        },
+        destructive: {
+            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            class: 'bg-[var(--mh-color-danger)] text-[var(--mh-color-danger-foreground)]',
+        },
+        clear: {
+            layout: 'ml-auto inline-flex items-center rounded-md px-3 py-2 text-sm',
+            class: 'text-[var(--mh-color-muted-foreground)] hover:opacity-90',
+        },
+    },
+
+    contextMenu: {
+        root: {
+            layout: 'fixed z-50 flex min-w-48 flex-col p-1',
+            class: 'rounded-md bg-[var(--mh-color-surface)] text-[var(--mh-color-foreground)] shadow-lg ring-1 ring-[var(--mh-color-muted)]',
+        },
+        item: {
+            layout: 'flex w-full items-center rounded px-3 py-2 text-left text-sm disabled:opacity-50',
+            class: 'hover:bg-[var(--mh-color-muted)]',
+        },
+        destructive: {
+            layout: 'flex w-full items-center rounded px-3 py-2 text-left text-sm disabled:opacity-50',
+            class: 'text-[var(--mh-color-danger)] hover:bg-[var(--mh-color-muted)]',
+        },
+    },
+
+    dropzone: {
+        root: {
+            layout: 'flex flex-col items-center justify-center gap-2 p-6 text-center',
+            class: 'rounded-md border-2 border-dashed border-[var(--mh-color-muted)] text-[var(--mh-color-muted-foreground)]',
+        },
+        /*
+         * ⚠️ A SEPARATE ENTRY RATHER THAN A CLASS APPENDED WHILE DRAGGING. A host replacing
+         * the resting skin would otherwise keep our highlight, and the two would clash on
+         * precisely the frame somebody is looking at.
+         */
+        active: {
+            layout: 'flex flex-col items-center justify-center gap-2 p-6 text-center',
+            class: 'rounded-md border-2 border-dashed border-[var(--mh-color-accent)] text-[var(--mh-color-foreground)]',
+        },
+        label: {
+            layout: 'text-sm font-medium',
+            class: 'text-[var(--mh-color-foreground)]',
+        },
+        input: {
+            layout: 'text-sm',
+            class: '',
+        },
+        hint: {
+            layout: 'text-xs',
+            class: '',
+        },
+    },
+
+    uploadQueue: {
+        root: {
+            layout: 'flex flex-col gap-2 p-3',
+            class: 'rounded-md bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+        header: {
+            layout: 'flex items-center justify-between',
+            class: '',
+        },
+        title: {
+            layout: 'text-sm font-semibold',
+            class: '',
+        },
+        summary: {
+            layout: 'text-xs',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        list: {
+            layout: 'flex flex-col gap-2',
+            class: '',
+        },
+        item: {
+            layout: 'flex flex-wrap items-center gap-2',
+            class: '',
+        },
+        name: {
+            layout: 'grow truncate text-sm',
+            class: '',
+        },
+        progress: {
+            layout: 'h-2 w-32',
+            class: '',
+        },
+        status: {
+            layout: 'text-xs uppercase',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        error: {
+            layout: 'text-xs',
+            class: 'text-[var(--mh-color-danger)]',
+        },
+        abort: {
+            layout: 'inline-flex items-center rounded px-2 py-1 text-xs',
+            class: 'bg-[var(--mh-color-surface)] text-[var(--mh-color-foreground)]',
+        },
+        retry: {
+            layout: 'inline-flex items-center rounded px-2 py-1 text-xs',
+            class: 'bg-[var(--mh-color-surface)] text-[var(--mh-color-foreground)]',
+        },
+        clear: {
+            layout: 'w-fit rounded px-2 py-1 text-xs',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+    },
+
+    quotaMeter: {
+        root: {
+            layout: 'flex flex-col gap-1',
+            class: '',
+        },
+        label: {
+            layout: 'text-xs font-medium',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        meter: {
+            layout: 'h-2 w-full',
+            class: '',
+        },
+        summary: {
+            layout: 'text-xs',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+    },
+    detailsPanel: {
+        root: {
+            layout: 'flex w-full flex-col gap-3 p-4',
+            class: 'rounded-md bg-[var(--mh-color-surface)] text-[var(--mh-color-foreground)] ring-1 ring-[var(--mh-color-muted)]',
+        },
+        facts: {
+            layout: 'grid grid-cols-2 gap-2 text-sm',
+            class: '',
+        },
+        fact: {
+            layout: 'flex flex-col',
+            class: '',
+        },
+        term: {
+            layout: 'text-xs uppercase',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        value: {
+            layout: 'truncate',
+            class: '',
+        },
+        field: {
+            layout: 'flex flex-col gap-1',
+            class: '',
+        },
+        label: {
+            layout: 'text-xs font-medium',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        input: {
+            layout: 'rounded-md px-2 py-1 text-sm',
+            class: 'bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+        save: {
+            layout: 'w-fit rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            class: 'bg-[var(--mh-color-accent)] text-[var(--mh-color-accent-foreground)]',
+        },
+    },
 }
