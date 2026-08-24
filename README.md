@@ -163,8 +163,33 @@ $post->removeMedia($a, 'attachments'); // detaches; the file stays in the librar
 owns costs one row and no bytes — no re-upload, no second copy, nothing extra to delete later.
 
 A collection is a rule, not a folder: `single()`, `accepts()`, `maxSize()`, `onDisk()`,
-`fallback()`. The rules are checked **on the real type and before the bytes are written**, and a
-collection nobody declared is unconstrained rather than refused.
+`fallback()`, `conversions()`. The rules are checked **on the real type and before the bytes are
+written**, and a collection nobody declared is unconstrained rather than refused.
+
+### Derivatives, per collection
+
+A cover and an attachment do not need the same thing. One is shown large and wants a wide
+version; the other is downloaded and wants nothing at all — and a single global list means every
+PDF in a folder of invoices costs queue time and storage for a thumbnail no screen ever shows.
+
+```php
+$collections->add('cover')->conversions(['hero' => ['width' => 1200, 'fit' => 'contain']]);
+$collections->add('documents')->withoutConversions();
+$collections->add('attachments');   // whatever the configuration says
+```
+
+⚠️ **`conversions()` replaces the configured set rather than adding to it.** Merging would make
+the global `thumb` impossible to remove: a collection that wants one large image would get two,
+with no way to say otherwise.
+
+⚠️ **And saying nothing keeps exactly what happened before.** A collection without a mention
+gets the configured definitions, so adding this changes nothing for an installation that never
+asked for it.
+
+A file chosen from the library gets them too, not only an upload — otherwise the one case a media
+library exists for would be the only one that never receives what the collection asked for.
+Derivatives are extra files keyed by name, so building one more takes nothing away from the other
+models pointing at the same media, and the original is never touched.
 
 ---
 
@@ -301,8 +326,8 @@ without turning a test red on both sides. See [the browser side](docs/browser.md
 | ✅ | the picker, and media in a form — MhMediaInput, MhMediaGallery |
 | ✅ | actions, uploading, quota and details |
 | ✅ | the full library screen — `MhMediaLibrary` |
+| ✅ | per-collection derivative definitions |
 | ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
-| ⏳ | per-collection derivative definitions |
 
 ⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
 request-forgery primitive: without a guard it reaches internal addresses, cloud metadata

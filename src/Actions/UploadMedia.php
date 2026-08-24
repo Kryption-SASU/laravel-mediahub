@@ -115,7 +115,14 @@ final class UploadMedia
          * ⚠️ AND THE ORIGINAL IS ALREADY WRITTEN, INTACT. Derivatives are EXTRA files: a video,
          * a document, an archive produce none and are not touched.
          */
-        GenerateConversionsJob::dispatch($media);
+        /*
+         * ⚠️ WHAT TO BUILD CAN COME FROM THE CALLER, and `null` still means "whatever the
+         * configuration says". A collection decides at the moment the file is attached; reading
+         * it again on the worker would mean asking a model that may have changed since.
+         */
+        $wanted = $context['conversions'] ?? null;
+
+        GenerateConversionsJob::dispatch($media, is_array($wanted) ? $wanted : null);
 
         $this->events->dispatch(new MediaUploaded($media));
 
