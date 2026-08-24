@@ -1,0 +1,49 @@
+{
+    "data": {
+        "folder": null,
+        "breadcrumbs": [],
+        "folders": [
+            {
+                "id": "00000000-0000-4000-8000-000000000000",
+                "name": "Invoices",
+                "slug": "invoices",
+                "path": "invoices",
+                "depth": 0,
+                "parent_id": null,
+                "trashed_at": null,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00"
+            }
+        ],
+        "media": [
+            {
+                "id": "00000000-0000-4000-8000-000000000000",
+                "name": "Annual report",
+                "file_name": "annual-report.pdf",
+                "extension": "pdf",
+                "mime_type": "application/pdf",
+                "type": "document",
+                "size": 182311,
+                "width": 1240,
+                "height": 1754,
+                "duration": 0,
+                "folder_id": null,
+                "custom_properties": {
+                    "alt": "The 2026 annual report"
+                },
+                "url": "http://localhost/media/00000000-0000-4000-8000-000000000000/file?expires=&signature=",
+                "download_url": "http://localhost/media/00000000-0000-4000-8000-000000000000/download?expires=&signature=",
+                "thumbnail_url": null,
+                "trashed_at": null,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00"
+            }
+        ]
+    },
+    "meta": {
+        "current_page": 1,
+        "last_page": 1,
+        "per_page": 24,
+        "total": 1
+    }
+}

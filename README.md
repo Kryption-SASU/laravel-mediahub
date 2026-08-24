@@ -275,6 +275,11 @@ driver's answers are confronted with it — on any machine, including one with n
 
 Coverage floor: **85%**, enforced by the pipeline.
 
+The browser side is held to the same floor, with `npm run types` and `npm run test:coverage`.
+Its types are not merely declared: the fixtures they are checked against are **written by the PHP
+suite from real responses** and committed, so the server cannot change the shape of a payload
+without turning a test red on both sides. See [the browser side](docs/browser.md).
+
 ---
 
 ## Roadmap
@@ -285,9 +290,11 @@ Coverage floor: **85%**, enforced by the pipeline.
 | ✅ | models, migrations, uploading, derivatives, trash |
 | ✅ | HTTP API, streamed serving and archives, signed URLs |
 | ✅ | attaching media to host models — `HasMedia`, collections, `addExistingMedia()` |
+| ✅ | the browser core — typed client, upload queue, no framework |
+| ✅ | Vue 3 composables — browsing, selection, uploading, actions, picking |
 | ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
 | ⏳ | per-collection derivative definitions |
-| ⏳ | Vue 3 interface |
+| ⏳ | Vue 3 components |
 
 ⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
 request-forgery primitive: without a guard it reaches internal addresses, cloud metadata
@@ -299,6 +306,7 @@ endpoints and anything else the host can see. It will arrive with that guard, or
 
 - [Installation](docs/installation.md)
 - [Usage](docs/usage.md)
+- [The browser side](docs/browser.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 

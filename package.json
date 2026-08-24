@@ -1,0 +1,32 @@
+{
+    "name": "@kryption/mediahub",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "The browser side of kryption/laravel-mediahub: a typed client, an upload queue, and Vue composables.",
+    "license": "Apache-2.0",
+    "exports": {
+        "./client": "./resources/js/client/index.ts",
+        "./vue": "./resources/js/vue/index.ts"
+    },
+    "scripts": {
+        "test": "vitest run",
+        "test:coverage": "vitest run --coverage",
+        "types": "tsc --noEmit"
+    },
+    "peerDependencies": {
+        "vue": "^3.4"
+    },
+    "peerDependenciesMeta": {
+        "vue": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@types/node": "^22.20.1",
+        "@vitest/coverage-v8": "^4.1.11",
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.11",
+        "vue": "^3.5.41"
+    }
+}

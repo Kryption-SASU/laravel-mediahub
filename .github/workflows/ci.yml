@@ -233,7 +233,16 @@ jobs:
       - name: Refuse an untested front
         if: steps.front.outputs.present == 'yes'
         run: |
-          node -e "const p=require('./package.json'); if(!p.scripts||!p.scripts['test:coverage']){console.error('package.json has no \"test:coverage\" script — the front cannot be verified.');process.exit(1)}"
+          node -e "const p=require('./package.json'); for (const s of ['test:coverage','types']) if(!p.scripts||!p.scripts[s]){console.error('package.json has no \"'+s+'\" script — the front cannot be verified.');process.exit(1)}"
+
+      # ⚠️ THE TYPE CHECK IS A TEST HERE, NOT A CONVENIENCE. Half of what keeps the browser's
+      # types honest happens at compile time: `contract.test.ts` assigns fixtures written by the
+      # PHP suite to the declared types, so a renamed key fails HERE, by name, and never reaches
+      # a screen. Left out of the pipeline, that half would only ever run on the machine of
+      # whoever remembered to ask for it.
+      - name: Types
+        if: steps.front.outputs.present == 'yes'
+        run: npm run types
 
       # The floor itself is declared in the Vitest configuration
       # (`coverage.thresholds.lines`), so that a developer running the suite locally is held to
