@@ -72,4 +72,20 @@ return [
     'archive_too_many_files' => 'Too many files were selected for a single download.',
     'archive_too_large' => 'This selection is too large to download in one go.',
 
+
+    // -- Fetching from a web address ----------------------------------------
+    'remote_disabled' => 'Fetching files from a web address is turned off.',
+    'remote_url_invalid' => 'That web address cannot be read.',
+    'remote_scheme_not_allowed' => 'Only web addresses starting with http or https are accepted.',
+    'remote_credentials_not_allowed' => 'That web address carries a user name and a password.',
+    'remote_port_not_allowed' => 'That web address uses a port that is not accepted.',
+    'remote_host_not_allowed' => 'That website is not on the list of accepted ones.',
+    'remote_address_not_allowed' => 'That web address points somewhere it may not.',
+    'remote_unresolvable' => 'That website could not be found.',
+    'remote_unreachable' => 'That web address could not be read.',
+    'remote_too_many_redirects' => 'That web address redirects too many times.',
+    'remote_too_large' => 'The file at that address is too large.',
+    'remote_empty' => 'That address answered with an empty file.',
+    'remote_unnamed' => 'That address does not say what the file is called. Give it a name.',
+    'remote_unsupported' => 'This installation cannot fetch files from a web address.',
 ];

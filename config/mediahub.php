@@ -446,4 +446,48 @@ return [
      * ── 7. LANGUAGE ─────────────────────────────────────────────────────────
      */
     'locale' => null,
+
+    /*
+     * -- FETCHING A FILE FROM A URL ------------------------------------------
+     *
+     * ⚠️ OFF BY DEFAULT, AND THAT IS A POSITION RATHER THAN CAUTION. Fetching an address
+     * somebody else chose is a request-forgery primitive: the server sits inside the network and
+     * can reach the database, the queue, an admin panel bound to localhost, and -- on every major
+     * cloud -- a metadata endpoint that hands credentials to anything that asks. An installation
+     * that never uses this feature should not carry its risk.
+     *
+     * ⚠️ AND THE GUARD IS NOT OPTIONAL WHEN IT IS ON. Turning this on accepts that the package
+     * will follow a URL; it does not accept that it will follow one anywhere.
+     */
+    'remote' => [
+        'enabled' => env('MEDIAHUB_REMOTE_FETCH', false),
+
+        /* ⚠️ `file://` READS THE DISK AND `gopher://` CAN TALK TO A REDIS. Only these two. */
+        'schemes' => ['http', 'https'],
+
+        /*
+         * ⚠️ A PORT LIST IS A CHEAP AND EFFECTIVE HALF OF THIS DEFENCE. Most of what is worth
+         * reaching inside a network listens somewhere other than 80 or 443.
+         */
+        'ports' => [80, 443],
+
+        /*
+         * ⚠️ NAMED HOSTS MAKE EVERY OTHER RULE A SECOND LINE. Where an application knows the
+         * handful of places it fetches from, listing them is stronger than any address check --
+         * and the match is exact, because `example.com.attacker.test` ends with `example.com`.
+         */
+        'hosts' => [],
+
+        /* ⚠️ COUNTED WHILE IT ARRIVES: a Content-Length is a claim by the other side. */
+        'max_bytes' => 32 * 1024 * 1024,
+
+        'timeout' => 10,
+
+        /*
+         * ⚠️ EVERY HOP IS CHECKED AGAIN, INCLUDING THE LAST. A public URL answering 302
+         * towards an internal address is the shape of this attack.
+         */
+        'max_redirects' => 3,
+    ],
+
 ];
