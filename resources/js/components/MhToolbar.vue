@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, useId, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import type { MediaSort, MediaType } from '../client'
 import { MEDIA_TYPES } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 
@@ -33,10 +34,10 @@ const props = withDefaults(
         sort: 'created_at',
         direction: 'desc',
         types: () => [],
-        searchLabel: 'Search',
-        sortLabel: 'Sort by',
-        typeLabel: 'Kind',
-        allTypesLabel: 'Everything',
+        searchLabel: undefined,
+        sortLabel: undefined,
+        typeLabel: undefined,
+        allTypesLabel: undefined,
         ui: undefined,
     },
 )
@@ -48,6 +49,19 @@ const emit = defineEmits<{
 }>()
 
 const cls = useMediaTheme('toolbar', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    search: props.searchLabel ?? t('toolbar.search'),
+    sort: props.sortLabel ?? t('toolbar.sort'),
+    type: props.typeLabel ?? t('toolbar.type'),
+    allTypes: props.allTypesLabel ?? t('toolbar.allTypes'),
+}))
 
 const searchId = useId()
 const sortId = useId()
@@ -64,12 +78,11 @@ watch(
     },
 )
 
-const SORTS: ReadonlyArray<{ value: MediaSort; label: string }> = [
-    { value: 'created_at', label: 'Date added' },
-    { value: 'updated_at', label: 'Last changed' },
-    { value: 'name', label: 'Name' },
-    { value: 'size', label: 'Size' },
-]
+/*
+ * ⚠️ THE ORDERS COME FROM THE TYPE, THEIR NAMES FROM THE TRANSLATION. Two lists would drift:
+ * one the server accepts, one the screen shows.
+ */
+const SORTS: readonly MediaSort[] = ['created_at', 'updated_at', 'name', 'size']
 
 function onSort(event: Event): void {
     emit('sort', (event.target as HTMLSelectElement).value as MediaSort, props.direction)
@@ -89,28 +102,32 @@ function onType(event: Event): void {
 <template>
     <div :class="cls('root')">
         <form :class="cls('search')" role="search" @submit.prevent="$emit('search', term)">
-            <label :class="cls('label')" :for="searchId">{{ searchLabel }}</label>
+            <label :class="cls('label')" :for="searchId">{{ words.search }}</label>
             <input :id="searchId" v-model="term" :class="cls('input')" type="search" />
         </form>
 
         <div :class="cls('group')">
-            <label :class="cls('label')" :for="typeId">{{ typeLabel }}</label>
+            <label :class="cls('label')" :for="typeId">{{ words.type }}</label>
             <select
                 :id="typeId"
                 :class="cls('select')"
                 :value="types[0] ?? ''"
                 @change="onType"
             >
-                <option value="">{{ allTypesLabel }}</option>
-                <option v-for="kind in MEDIA_TYPES" :key="kind" :value="kind">{{ kind }}</option>
+                <option value="">{{ words.allTypes }}</option>
+                <!-- ⚠️ THE KIND IS TRANSLATED, NOT PRINTED. `document` is a value in a payload,
+                     not a word anybody chose to show somebody. -->
+                <option v-for="kind in MEDIA_TYPES" :key="kind" :value="kind">
+                    {{ t('types.' + kind) }}
+                </option>
             </select>
         </div>
 
         <div :class="cls('group')">
-            <label :class="cls('label')" :for="sortId">{{ sortLabel }}</label>
+            <label :class="cls('label')" :for="sortId">{{ words.sort }}</label>
             <select :id="sortId" :class="cls('select')" :value="sort" @change="onSort">
-                <option v-for="option in SORTS" :key="option.value" :value="option.value">
-                    {{ option.label }}
+                <option v-for="option in SORTS" :key="option" :value="option">
+                    {{ t('toolbar.sort.' + option) }}
                 </option>
             </select>
 
@@ -122,7 +139,7 @@ function onType(event: Event): void {
             <button
                 type="button"
                 :class="cls('direction')"
-                :aria-label="direction === 'asc' ? 'Sort descending' : 'Sort ascending'"
+                :aria-label="direction === 'asc' ? t('toolbar.sortDescending') : t('toolbar.sortAscending')"
                 @click="onDirection"
             >
                 {{ direction === 'asc' ? '↑' : '↓' }}

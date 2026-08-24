@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useNativeDialog } from './useNativeDialog'
@@ -34,8 +35,8 @@ const props = withDefaults(
     }>(),
     {
         message: undefined,
-        confirmLabel: 'Confirm',
-        cancelLabel: 'Cancel',
+        confirmLabel: undefined,
+        cancelLabel: undefined,
         destructive: false,
         ui: undefined,
     },
@@ -44,6 +45,17 @@ const props = withDefaults(
 const emit = defineEmits<{ confirm: []; cancel: []; 'update:open': [value: boolean] }>()
 
 const cls = useMediaTheme('confirmDialog', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    confirm: props.confirmLabel ?? t('dialog.confirm'),
+    cancel: props.cancelLabel ?? t('dialog.cancel'),
+}))
 
 const element = ref<HTMLDialogElement | null>(null)
 
@@ -116,8 +128,8 @@ function confirm(): void {
         </div>
 
         <div :class="cls('actions')">
-            <button type="button" :class="cls('cancel')" @click="cancel">{{ cancelLabel }}</button>
-            <button type="button" :class="confirmClass" @click="confirm">{{ confirmLabel }}</button>
+            <button type="button" :class="cls('cancel')" @click="cancel">{{ words.cancel }}</button>
+            <button type="button" :class="confirmClass" @click="confirm">{{ words.confirm }}</button>
         </div>
     </dialog>
 </template>

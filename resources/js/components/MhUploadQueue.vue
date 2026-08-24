@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { UploadItem } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 
@@ -25,10 +26,10 @@ const props = withDefaults(
         ui?: MhComponentOverride
     }>(),
     {
-        title: 'Uploads',
-        retryLabel: 'Try again',
-        abortLabel: 'Stop',
-        clearLabel: 'Clear finished',
+        title: undefined,
+        retryLabel: undefined,
+        abortLabel: undefined,
+        clearLabel: undefined,
         ui: undefined,
     },
 )
@@ -36,6 +37,19 @@ const props = withDefaults(
 defineEmits<{ retry: [id: string]; abort: [id: string]; clear: [] }>()
 
 const cls = useMediaTheme('uploadQueue', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    title: props.title ?? t('queue.title'),
+    retry: props.retryLabel ?? t('queue.retry'),
+    abort: props.abortLabel ?? t('queue.abort'),
+    clear: props.clearLabel ?? t('queue.clear'),
+}))
 
 const finished = computed(
     () => props.items.filter((item) => item.status === 'done' || item.status === 'failed').length,
@@ -54,9 +68,9 @@ function running(item: UploadItem): boolean {
 </script>
 
 <template>
-    <section v-if="items.length > 0" :class="cls('root')" :aria-label="title">
+    <section v-if="items.length > 0" :class="cls('root')" :aria-label="words.title">
         <header :class="cls('header')">
-            <p :class="cls('title')">{{ title }}</p>
+            <p :class="cls('title')">{{ words.title }}</p>
 
             <!-- ⚠️ THE COUNT IS WHAT IS ANNOUNCED, once per file rather than once per event. -->
             <p :class="cls('summary')" role="status">{{ finished }} / {{ items.length }}</p>
@@ -80,7 +94,8 @@ function running(item: UploadItem): boolean {
                     :aria-label="item.file.name"
                 />
 
-                <span v-else :class="cls('status')">{{ item.status }}</span>
+                <!-- ⚠️ `failed` IS A STATE, NOT A WORD FOR SOMEBODY TO READ. -->
+                <span v-else :class="cls('status')">{{ t('queue.status.' + item.status) }}</span>
 
                 <!-- ⚠️ THE REASON, NOT A GENERIC FAILURE. "too_large" and "mime_not_allowed" call
                      for different answers, and only the person can give either. -->
@@ -92,20 +107,20 @@ function running(item: UploadItem): boolean {
                     v-if="running(item)"
                     type="button"
                     :class="cls('abort')"
-                    :aria-label="`${abortLabel}: ${item.file.name}`"
+                    :aria-label="`${words.abort}: ${item.file.name}`"
                     @click="$emit('abort', item.id)"
                 >
-                    {{ abortLabel }}
+                    {{ words.abort }}
                 </button>
 
                 <button
                     v-if="item.status === 'failed' || item.status === 'aborted'"
                     type="button"
                     :class="cls('retry')"
-                    :aria-label="`${retryLabel}: ${item.file.name}`"
+                    :aria-label="`${words.retry}: ${item.file.name}`"
                     @click="$emit('retry', item.id)"
                 >
-                    {{ retryLabel }}
+                    {{ words.retry }}
                 </button>
             </li>
         </ul>
@@ -116,7 +131,7 @@ function running(item: UploadItem): boolean {
             :class="cls('clear')"
             @click="$emit('clear')"
         >
-            {{ clearLabel }}
+            {{ words.clear }}
         </button>
     </section>
 </template>

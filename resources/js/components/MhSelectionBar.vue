@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { resolveMediaHub } from '../vue/context'
@@ -26,12 +27,22 @@ const props = withDefaults(
         client?: MediaHubClient
         ui?: MhComponentOverride
     }>(),
-    { actions: undefined, clearLabel: 'Clear', client: undefined, ui: undefined },
+    { actions: undefined, clearLabel: undefined, client: undefined, ui: undefined },
 )
 
 const emit = defineEmits<{ clear: []; done: [action: MhAction] }>()
 
 const cls = useMediaTheme('selectionBar', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    clear: props.clearLabel ?? t('selection.clear'),
+}))
 
 const api = resolveMediaHub(props.client)
 
@@ -58,7 +69,7 @@ const count = computed(
 </script>
 
 <template>
-    <div v-if="count > 0" :class="cls('root')" role="toolbar" :aria-label="`${count} selected`">
+    <div v-if="count > 0" :class="cls('root')" role="toolbar" :aria-label="t('selection.count', {}, count)">
         <p :class="cls('count')" role="status">{{ count }}</p>
 
         <div :class="cls('actions')">
@@ -74,7 +85,7 @@ const count = computed(
             </button>
         </div>
 
-        <button type="button" :class="cls('clear')" @click="$emit('clear')">{{ clearLabel }}</button>
+        <button type="button" :class="cls('clear')" @click="$emit('clear')">{{ words.clear }}</button>
     </div>
 
     <!-- ⚠️ OUTSIDE THE TOOLBAR, NOT INSIDE IT. A dialog is not a control of the bar, and

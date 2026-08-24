@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Folder, Media, MediaHubClient, MediaSort, MediaType } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useMediaBrowser } from '../vue/useMediaBrowser'
@@ -44,8 +45,8 @@ const props = withDefaults(
     {
         client: undefined,
         actions: undefined,
-        emptyTitle: 'Nothing here yet',
-        emptyDescription: 'Drop files, or choose them from your computer.',
+        emptyTitle: undefined,
+        emptyDescription: undefined,
         ui: undefined,
     },
 )
@@ -53,6 +54,17 @@ const props = withDefaults(
 const emit = defineEmits<{ open: [media: Media] }>()
 
 const cls = useMediaTheme('mediaLibrary', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    emptyTitle: props.emptyTitle ?? t('library.empty.title'),
+    emptyDescription: props.emptyDescription ?? t('library.empty.description'),
+}))
 
 const browser = useMediaBrowser(props.client)
 const selection = useSelection()
@@ -80,10 +92,12 @@ const chosen = computed<string[]>({
  */
 const searching = computed(() => (browser.query.value.search ?? '') !== '')
 
-const emptyTitle = computed(() => (searching.value ? 'No results' : props.emptyTitle))
+const emptyTitle = computed(() =>
+    searching.value ? t('library.noResults.title') : words.value.emptyTitle,
+)
 
 const emptyDescription = computed(() =>
-    searching.value ? 'Nothing matches what you searched for.' : props.emptyDescription,
+    searching.value ? t('library.noResults.description') : words.value.emptyDescription,
 )
 
 async function open(folder: Folder | null): Promise<void> {

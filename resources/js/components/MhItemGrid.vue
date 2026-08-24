@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Media, MediaHubError } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import MhErrorState from './MhErrorState.vue'
@@ -51,6 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const cls = useMediaTheme('itemGrid', () => props.ui)
+const t = useMediaText()
 
 const root = ref<HTMLElement | null>(null)
 const cursor = ref(0)
@@ -143,7 +145,8 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
-const label = computed(() => `${props.media.length} media`)
+/* ⚠️ COUNTED, SO PLURALISED — and the rule for that belongs to the language, not to us. */
+const label = computed(() => t('grid.count', {}, props.media.length))
 </script>
 
 <template>

@@ -45,6 +45,17 @@ export type { MhAction, UseMediaActionList } from './actions'
 export { useActionRunner } from './useActionRunner'
 export type { UseActionRunner } from './useActionRunner'
 
+
+/*
+ * ⚠️ THE WORDS ARE PART OF THE PUBLIC SURFACE, and they have to be. With the markup frozen,
+ * translating is the only way to change a label — so the catalogue, the translator and the
+ * hook that reads it are as much of a contract as the components themselves.
+ */
+export { createTranslator, mediaTextKey, provideMediaText, useMediaText } from '../i18n/context'
+export type { MhTranslator } from '../i18n/context'
+export { MH_DEFAULT_LOCALE, MH_LOCALES } from '../i18n/messages'
+export type { MhLocale, MhMessages } from '../i18n/messages'
+
 export { defaultTheme } from '../theme/defaults'
 export { mergeTheme, classesOf } from '../theme/merge'
 export { mediaThemeKey, provideMediaTheme, useMediaTheme } from '../theme/context'

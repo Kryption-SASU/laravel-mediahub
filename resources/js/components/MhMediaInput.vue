@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import type { Media, MediaHubClient, MediaType } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import MhMediaPicker from './MhMediaPicker.vue'
@@ -43,10 +44,10 @@ const props = withDefaults(
         media: null,
         types: () => [],
         label: undefined,
-        chooseLabel: 'Choose a file',
-        replaceLabel: 'Replace',
-        clearLabel: 'Remove',
-        emptyLabel: 'No file chosen',
+        chooseLabel: undefined,
+        replaceLabel: undefined,
+        clearLabel: undefined,
+        emptyLabel: undefined,
         disabled: false,
         client: undefined,
         ui: undefined,
@@ -59,6 +60,19 @@ const emit = defineEmits<{
 }>()
 
 const cls = useMediaTheme('mediaInput', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    choose: props.chooseLabel ?? t('input.choose'),
+    replace: props.replaceLabel ?? t('input.replace'),
+    clear: props.clearLabel ?? t('input.clear'),
+    empty: props.emptyLabel ?? t('input.empty'),
+}))
 
 const picker = ref<InstanceType<typeof MhMediaPicker> | null>(null)
 const held = ref<Media | null>(props.media)
@@ -122,14 +136,14 @@ function clear(): void {
 
         <div :class="cls('preview')">
             <MhThumbnail v-if="chosen" :media="chosen" :alt="null" size="4rem" />
-            <span v-else :class="cls('empty')">{{ emptyLabel }}</span>
+            <span v-else :class="cls('empty')">{{ words.empty }}</span>
 
             <span v-if="chosen" :class="cls('name')">{{ chosen.name }}</span>
         </div>
 
         <div :class="cls('actions')">
             <button type="button" :class="cls('choose')" :disabled="disabled" @click="choose">
-                {{ chosen ? replaceLabel : chooseLabel }}
+                {{ chosen ? words.replace : words.choose }}
             </button>
 
             <button
@@ -139,7 +153,7 @@ function clear(): void {
                 :disabled="disabled"
                 @click="clear"
             >
-                {{ clearLabel }}
+                {{ words.clear }}
             </button>
         </div>
 

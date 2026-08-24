@@ -64,6 +64,24 @@ red, the signature is never recorded, and the first outside contribution can nev
 the gate looks present and holds nothing. Protecting `cla-signatures` reopens the same hole,
 just as quietly.
 
+### Create its signature file at the same time
+
+⚠️ **The agreement check fails on its very first run if the file is missing** — the action
+creates it and reports a failure in the same pass. Measured here: the first pull request opened
+against a fresh repository showed a red check for a signature nobody owed, and a re-run with no
+change turned it green.
+
+That is a bad first impression on a repository whose whole point is to accept contributions, and
+it is avoidable. When the branch is created, put an empty catalogue on it:
+
+```
+.github/cla/signatures.json     {"signedContributors": []}
+```
+
+The failure only ever happens once per repository, which is exactly why it is easy to meet again
+and hard to remember: it reappears on every recreation, and never in between.
+
+
 ## What GitHub cannot express
 
 A rule of the form "`main` only accepts pull requests coming from branch X" **does not exist**.

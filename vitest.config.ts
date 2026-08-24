@@ -25,6 +25,7 @@ export default defineConfig({
                         'resources/js/client/**/*.test.ts',
                         'resources/js/vue/**/*.test.ts',
                         'resources/js/theme/**/*.test.ts',
+                        'resources/js/i18n/**/*.test.ts',
                     ],
                 },
             },

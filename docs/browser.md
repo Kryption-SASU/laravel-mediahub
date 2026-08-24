@@ -417,6 +417,67 @@ Two behaviours worth knowing, because both are invisible until they bite:
   opening a second picker releases the first — a promise that never settles is a screen that waits
   forever, and the caller has no way to find out.
 
+## Words
+
+⚠️ **The markup is frozen, so translating is the only way to change a label.** That makes the
+catalogue part of the contract rather than a convenience: a key that does not exist is a word
+nobody can change, and the only remaining move would be to fork the component — which is exactly
+what the frozen markup exists to prevent.
+
+Two languages ship complete: `en` and `fr`.
+
+```ts
+app.use(createMediaHub({ client, locale: 'fr' }))
+```
+
+```vue
+<MhProvider :client="client" locale="fr">
+```
+
+Both are reactive: `createMediaHub(...).setLocale('en')` changes every word on screen, which is
+what a language switcher needs.
+
+### Using your own engine
+
+If the application already runs `vue-i18n`, or anything else, plug it in and keep one catalogue
+for the whole product:
+
+```ts
+app.use(createMediaHub({ client, text: (key, replace, count) => i18n.t(key, replace, count) }))
+```
+
+The catalogue is exported as plain data, so a headless host — or one rendering from something
+other than Vue — can consume it directly:
+
+```ts
+import { MH_LOCALES } from '@mediahub/components'
+
+const french = MH_LOCALES.fr.messages
+```
+
+### Changing one word
+
+Every label is also a prop, and the prop wins. That is the exception, not the route:
+
+```vue
+<MhMediaInput v-model="id" choose-label="Pick a portrait" />
+```
+
+Use it for a one-off. For anything you would write more than once, translate the key instead —
+otherwise the wording lives in forty templates and diverges between screens.
+
+### Counting
+
+⚠️ **Zero does not take the same form in every language.** English says "0 files", French says
+« 0 fichier ». The rule belongs to the language, not to the message, so each locale carries its
+own — and a single shared rule would be wrong in one of them on every screen that counts
+anything.
+
+⚠️ **A key that does not exist comes back as itself.** A blank button says nothing and looks
+like a rendering fault; `picker.choose` on a button names exactly what is missing, which is what
+somebody adding a language needs to read.
+
+
 ## Keeping the types honest
 
 A TypeScript interface is a claim about another program, and no TypeScript test can check it. Both

@@ -12,6 +12,8 @@ composer require kryption/laravel-mediahub
 That is the whole installation. Every point of contact with your application has a default that
 works as it is: no scoping, no quota, the `public` disk. You replace only what concerns you.
 
+⚠️ **A ready-made bundle for an application with no build ships on tagged versions only.** `composer require kryption/laravel-mediahub:^1.0` carries one; `dev-main` does not, and the failure is quiet — the API answers and the page renders nothing. See [delivery](docs/delivery.md).
+
 > **Status: under construction.** Everything documented here exists and is covered by the test
 > suite. What is missing is listed in [Roadmap](#roadmap) — nothing is promised that is not
 > built.
@@ -275,6 +277,8 @@ driver's answers are confronted with it — on any machine, including one with n
 
 Coverage floor: **85%**, enforced by the pipeline.
 
+Two languages ship complete, `en` and `fr`, and a test refuses a language that covers less than the other. With the markup frozen, translating is the only way to change a label — so a missing key would be a word nobody could change.
+
 The browser side is held to the same floor, with `npm run types` and `npm run test:coverage`.
 Its types are not merely declared: the fixtures they are checked against are **written by the PHP
 suite from real responses** and committed, so the server cannot change the shape of a payload
@@ -310,6 +314,7 @@ endpoints and anything else the host can see. It will arrive with that guard, or
 - [Installation](docs/installation.md)
 - [Usage](docs/usage.md)
 - [The browser side](docs/browser.md)
+- [Getting the browser side into your application](docs/delivery.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 

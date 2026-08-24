@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 
@@ -21,16 +22,26 @@ const props = withDefaults(
         label?: string
         ui?: MhComponentOverride
     }>(),
-    { count: 8, label: 'Loading', ui: undefined },
+    { count: 8, label: undefined, ui: undefined },
 )
 
 const cls = useMediaTheme('skeleton', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    loading: props.label ?? t('skeleton.loading'),
+}))
 
 const items = computed(() => Math.max(0, Math.min(Math.trunc(props.count), 48)))
 </script>
 
 <template>
-    <div :class="cls('root')" role="status" aria-busy="true" :aria-label="label">
+    <div :class="cls('root')" role="status" aria-busy="true" :aria-label="words.loading">
         <span v-for="index in items" :key="index" :class="cls('item')" aria-hidden="true" />
     </div>
 </template>
