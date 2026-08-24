@@ -105,6 +105,9 @@ describe('the public surface of the components', () => {
 
         expect(Object.keys(barrel).sort()).toEqual([
             'MhConfirmDialog',
+            'MhContextMenu',
+            'MhDetailsPanel',
+            'MhDropzone',
             'MhEmptyState',
             'MhErrorState',
             'MhItemCard',
@@ -113,14 +116,20 @@ describe('the public surface of the components', () => {
             'MhMediaInput',
             'MhMediaPicker',
             'MhProvider',
+            'MhQuotaMeter',
+            'MhSelectionBar',
             'MhSkeleton',
             'MhThumbnail',
+            'MhUploadQueue',
             'classesOf',
             'createMediaHub',
+            'defaultActions',
             'defaultTheme',
             'mediaThemeKey',
             'mergeTheme',
             'provideMediaTheme',
+            'useActionRunner',
+            'useMediaActionList',
             'useMediaTheme',
         ])
     })

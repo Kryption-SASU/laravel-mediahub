@@ -158,6 +158,78 @@ caller, from a dismissal.
 It fetches when it opens rather than when it mounts, so a picker sitting beside a form costs
 nothing on the pages nobody opens it from.
 
+## Acting on a selection
+
+The toolbar and the context menu render **the same list**, from `useMediaActionList`, and a test
+compares what the two produce for the same selection. Two lists kept by hand diverge at the first
+addition: somebody adds an action to the bar, forgets the menu, and nothing turns red — the screen
+still works, it simply offers less depending on where you clicked.
+
+```vue
+<MhSelectionBar :selection="selection.asSelection()" @clear="selection.clear()" />
+<MhContextMenu v-model:open="menuOpen" :selection="selection.asSelection()" :x="x" :y="y" />
+```
+
+Actions are **data**, so you can add your own — and yours replace ours by `id` rather than
+appearing beside them:
+
+```ts
+const actions: MhAction[] = [
+    {
+        id: 'publish',
+        label: 'Publish',
+        available: (selection) => (selection.media?.length ?? 0) > 0,
+        confirm: { title: 'Publish these files?' },
+        run: (selection) => publish(selection),
+    },
+]
+```
+
+⚠️ **`confirm` means "ask first", and the asking lives in one place.** A context menu that
+deleted without asking, beside a bar that asks, is a difference nobody documents and everybody
+discovers once. The selection is read **when the action runs**, not when it was requested:
+between the click and the answer somebody can tick another file, and acting on the older
+selection is exactly what a confirmation is supposed to prevent.
+
+## Uploading, on screen
+
+```vue
+<MhDropzone @files="upload.add($event, { folder })" />
+<MhUploadQueue
+    :items="upload.items.value"
+    @abort="upload.abort($event)"
+    @retry="upload.retry($event)"
+    @clear="upload.clearFinished()"
+/>
+```
+
+⚠️ **The dropzone carries a real `<input type="file">`, and that is not a fallback.**
+Dragging cannot be done from a keyboard, is awkward with a screen reader and is impossible on
+most touch devices — for a portion of your users the input is the only route, so it is a labelled
+control rather than something hidden behind a click handler.
+
+Each file gets its own row and its own progress. One request per file means one can be refused —
+too large, a type nobody allows — while the rest land; a single bar for the batch would report
+the whole thing as failed, and somebody would upload nineteen files again to recover one. An
+upload whose total the browser cannot compute shows as **indeterminate rather than at zero**,
+because a bar pinned at the left end says "nothing has happened" while bytes are going out.
+
+## The quota, and the details
+
+`MhQuotaMeter` draws a native `<meter>` where there is a limit, and **nothing at all where there
+is none** — zero would read as "empty" and a hundred as "full", while the truth is that the
+question does not apply. Sizes are spelled out: "1073741824" is a number people convert in their
+head every time they look at it.
+
+`MhDetailsPanel` shows one file and lets two things about it be changed: its name, and its
+**alternative text**. The second is a field at the same size as the first, deliberately — this is
+the only place in a media library where anybody can write it, and a library that never asks
+produces a site where every picture is silent.
+
+⚠️ **Only what changed is sent.** Attaching the properties to every rename would overwrite
+an alternative text somebody else edited in the meantime, and the loss would be invisible:
+nothing failed, the field simply went back to what that screen happened to be holding.
+
 ## The keyboard
 
 The grid is a listbox with **one tab stop**, and the arrows move inside it. Twenty-four items each
@@ -171,7 +243,7 @@ embedded one would become slower to leave than to use.
 | Home / End | first, last |
 | Space | choose |
 | Enter | open — in a picker, choose and close |
-| Escape | dismiss |
+| Escape | dismiss, or close the context menu |
 
 Dialogs are native `<dialog>` elements, so the focus trap, Escape and the inertness of everything
 behind them come from the browser rather than from code that has to be maintained.
@@ -238,7 +310,7 @@ sentence is a courtesy and changes with the wording and the locale. Framework va
 carry no `reason` at all — they answer `{message, errors}` — so `error.invalid` and
 `error.validation` are what to read there.
 
-## Uploading
+## The upload queue
 
 ```ts
 import { createUploadQueue } from '@mediahub/client'
