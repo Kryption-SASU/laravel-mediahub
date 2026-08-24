@@ -23,6 +23,12 @@ export { default as MhSkeleton } from './MhSkeleton.vue'
 export { default as MhErrorState } from './MhErrorState.vue'
 export { default as MhConfirmDialog } from './MhConfirmDialog.vue'
 
+export { default as MhItemCard } from './MhItemCard.vue'
+export { default as MhItemGrid } from './MhItemGrid.vue'
+export { default as MhMediaPicker } from './MhMediaPicker.vue'
+export { default as MhMediaInput } from './MhMediaInput.vue'
+export { default as MhMediaGallery } from './MhMediaGallery.vue' 
+
 export { defaultTheme } from '../theme/defaults'
 export { mergeTheme, classesOf } from '../theme/merge'
 export { mediaThemeKey, provideMediaTheme, useMediaTheme } from '../theme/context'

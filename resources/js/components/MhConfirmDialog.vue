@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
+import { useNativeDialog } from './useNativeDialog'
 
 /**
  * ASKING BEFORE SOMETHING IRREVERSIBLE.
@@ -73,36 +74,7 @@ watch(
 
 const confirmClass = computed(() => cls(props.destructive ? 'confirmDestructive' : 'confirm'))
 
-watch(
-    () => [props.open, element.value] as const,
-    ([open, dialog]) => {
-        if (!dialog) {
-            return
-        }
-
-        /*
-         * ⚠️ GUARDED, BECAUSE NOT EVERY DOCUMENT HAS `showModal`. Test environments and older
-         * embedded browsers expose `<dialog>` without its methods; calling it blind throws
-         * during a render and takes the whole screen with it, to avoid a confirmation prompt.
-         */
-        if (open && !dialog.open) {
-            if (typeof dialog.showModal === 'function') {
-                dialog.showModal()
-            } else {
-                dialog.setAttribute('open', '')
-            }
-        }
-
-        if (!open && dialog.open) {
-            if (typeof dialog.close === 'function') {
-                dialog.close()
-            } else {
-                dialog.removeAttribute('open')
-            }
-        }
-    },
-    { immediate: true, flush: 'post' },
-)
+useNativeDialog(element, () => props.open)
 
 function cancel(): void {
     if (answered.value) {
