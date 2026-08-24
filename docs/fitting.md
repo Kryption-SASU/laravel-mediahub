@@ -23,10 +23,15 @@ So it declares what it *needs to know* and asks. A contract is a question with a
 That default is right for a single-site application and wrong for a multi-tenant one. Answering
 it is your business, and it is usually fifteen lines.
 
-⚠️ **The defaults are not neutral, and one of them is dangerous.** `MediaScope` defaults to *no
-scoping*, which means every tenant sees every file. Nothing on screen says so. If your
-application has tenants, this is the first thing to bind, before you look at whether a screen
-renders.
+⚠️ **The defaults are not neutral, and one of them is dangerous.** The `MediaScope` shipped by
+default constrains nothing — every tenant sees every file, and nothing on screen says so. If
+your application has tenants, this is the first thing to bind, before you look at whether a
+screen renders.
+
+⚠️ **And the danger is in `constrain()`, not in the key.** The package calls `constrain()`
+unconditionally, so a null key does not switch scoping off by itself — it is a scope that
+returns the query untouched that does. Writing "if the key is null, do not filter" is the
+natural thing to write, and it is the mistake: absence has to be filtered like anything else.
 
 ---
 
@@ -145,10 +150,10 @@ final class OrganizationMediaScope implements MediaScope
         $organization = User::currentOrganizationId();
 
         /*
-         * ⚠️ `null` IS NOT RETURNED HERE, EVER. The contract allows it, and the package reads it
-         * as "no scoping" — that is, "see everything". A request that arrives without an
-         * organisation would then fall through to the whole library. Absence is a scope of its
-         * own, not a wildcard.
+         * ⚠️ ABSENCE IS A SCOPE OF ITS OWN, NEVER A WILDCARD. What decides that is `constrain()`
+         * below, not this method: the package calls it unconditionally, so a scope that stops
+         * filtering when the key is null opens the whole library — which is exactly what the
+         * default implementation does, and why binding one is the first thing to do.
          */
         return $organization === null ? 'platform' : 'orgs/'.$organization;
     }
@@ -189,7 +194,10 @@ public function test_two_organisations_do_not_see_each_other(): void
     self::assertNull(Media::find($mine->getKey()));
 }
 
-/** ⚠️ And the dangerous case: no organisation at all must not mean "everything". */
+/**
+ * ⚠️ And the dangerous case, which is decided in `constrain()`: no organisation at all must
+ * be filtered like any other scope, never left unfiltered.
+ */
 public function test_no_organisation_is_a_scope_rather_than_a_wildcard(): void
 {
     $this->actingAsOrganisation(1);
