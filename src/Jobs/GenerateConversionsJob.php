@@ -30,8 +30,14 @@ final class GenerateConversionsJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public function __construct(public readonly Media $media)
-    {
+    /**
+     * @param  array<string, array<string, mixed>>|null  $definitions  What to build, or `null` to
+     *                                                                let the configuration decide.
+     */
+    public function __construct(
+        public readonly Media $media,
+        public readonly ?array $definitions = null,
+    ) {
         /*
          * ⚠️ THE QUEUE IS CHOSEN IN THE CONFIGURATION, and `null` means "the default one".
          * Thumbnails are bulky and slow: isolating them keeps them from delaying emails and
@@ -44,8 +50,14 @@ final class GenerateConversionsJob implements ShouldQueue
         }
     }
 
+    /**
+     * ⚠️ THE DEFINITIONS TRAVEL WITH THE JOB, they are not read again when it runs. A collection
+     * decides what its media need at the moment the file is attached; looking the collection up
+     * later would mean serialising the model that owns it and asking it again — on a queue
+     * worker, minutes later, possibly after somebody changed it.
+     */
     public function handle(GenerateConversions $generate): void
     {
-        $generate($this->media);
+        $generate($this->media, $this->definitions);
     }
 }

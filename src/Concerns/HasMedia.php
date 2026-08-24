@@ -7,6 +7,7 @@ namespace Kryption\MediaHub\Concerns;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Kryption\MediaHub\Actions\UploadMedia;
+use Kryption\MediaHub\Jobs\GenerateConversionsJob;
 use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\UploadValidator;
 use Kryption\MediaHub\Contracts\UrlGenerator;
@@ -162,6 +163,10 @@ trait HasMedia
             $context['disk'] = $rules->disk();
         }
 
+        if ($rules->conversionDefinitions() !== null) {
+            $context['conversions'] = $rules->conversionDefinitions();
+        }
+
         return $this->addExistingMedia(app(UploadMedia::class)($payload, $context), $collection);
     }
 
@@ -192,6 +197,22 @@ trait HasMedia
             'collection' => $collection,
             'position' => $this->nextMediaPosition($collection),
         ]);
+
+        /*
+         * ⚠️ A COLLECTION WITH ITS OWN DERIVATIVES GETS THEM HERE TOO, and not only on upload.
+         * Without this, a cover chosen from the library — which is the whole point of having a
+         * library — would be the one case that never receives the large version the collection
+         * asked for, and the screen would fall back to a thumbnail with nothing explaining why.
+         *
+         * ⚠️ AND IT IS ADDITIVE, WHICH IS WHAT MAKES IT SAFE ON A SHARED FILE. Derivatives are
+         * extra files keyed by name: building one more takes nothing away from the other models
+         * pointing at the same media, and the original is never touched.
+         */
+        $wanted = $rules->conversionDefinitions();
+
+        if ($wanted !== null && $wanted !== []) {
+            GenerateConversionsJob::dispatch($media, $wanted);
+        }
 
         return $media;
     }

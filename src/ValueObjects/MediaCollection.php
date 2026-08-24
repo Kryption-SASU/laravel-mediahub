@@ -29,6 +29,16 @@ final class MediaCollection
 
     private ?string $fallbackUrl = null;
 
+    /**
+     * ⚠️ `null` MEANS "WHATEVER THE CONFIGURATION SAYS", AND IT IS NOT THE SAME AS AN EMPTY
+     * ARRAY. A collection that says nothing has to keep behaving exactly as it did before this
+     * existed, or adding the feature would silently change every installation that never asked
+     * for it. An empty array is a collection that deliberately wants none.
+     *
+     * @var array<string, array<string, mixed>>|null
+     */
+    private ?array $conversions = null;
+
     public function __construct(public readonly string $name)
     {
     }
@@ -70,6 +80,34 @@ final class MediaCollection
      * bucket, contracts on a private one: the choice belongs to the code declaring the
      * collection. Nothing here is reachable from an HTTP payload.
      */
+    /**
+     * THE DERIVATIVES THIS COLLECTION WANTS.
+     *
+     * ⚠️ IT REPLACES THE CONFIGURED SET RATHER THAN ADDING TO IT. Merging would make the global
+     * `thumb` impossible to remove: a collection that wants one large image would get two, and
+     * nothing anywhere would let it say otherwise. Replacing means what is written here is what
+     * is built, which is also what somebody reading the model expects.
+     *
+     * @param  array<string, array<string, mixed>>  $definitions
+     */
+    public function conversions(array $definitions): self
+    {
+        $this->conversions = $definitions;
+
+        return $this;
+    }
+
+    /**
+     * ⚠️ NONE AT ALL — for attachments, invoices, anything nobody previews. Building thumbnails
+     * for a folder of PDFs costs queue time and storage for images no screen ever shows.
+     */
+    public function withoutConversions(): self
+    {
+        $this->conversions = [];
+
+        return $this;
+    }
+
     public function onDisk(string $disk): self
     {
         $this->disk = $disk;
@@ -126,6 +164,16 @@ final class MediaCollection
     public function maxSizeInKilobytes(): ?int
     {
         return $this->maxSizeInKilobytes;
+    }
+
+    /**
+     * What to build, or `null` to leave the decision to the configuration.
+     *
+     * @return array<string, array<string, mixed>>|null
+     */
+    public function conversionDefinitions(): ?array
+    {
+        return $this->conversions;
     }
 
     public function disk(): ?string
