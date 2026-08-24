@@ -297,7 +297,7 @@ without turning a test red on both sides. See [the browser side](docs/browser.md
 | ⏳ | per-collection derivative definitions |
 | ✅ | the picker, and media in a form — MhMediaInput, MhMediaGallery |
 | ✅ | actions, uploading, quota and details |
-| ⏳ | the full library screen |
+| ✅ | the full library screen — `MhMediaLibrary` |
 
 ⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
 request-forgery primitive: without a guard it reaches internal addresses, cloud metadata
