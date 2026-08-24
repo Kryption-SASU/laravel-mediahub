@@ -6,3 +6,4 @@ composer.lock
 .idea
 /coverage.xml
 /coverage
+/dist

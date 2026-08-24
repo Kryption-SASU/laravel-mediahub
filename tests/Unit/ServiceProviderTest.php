@@ -89,4 +89,18 @@ class ServiceProviderTest extends TestCase
 
         @unlink(config_path('mediahub.php'));
     }
+
+    /**
+     * PUBLISHING THE BUNDLE WORKS EVEN WHERE THERE IS NO BUNDLE.
+     *
+     * ⚠️ THE STANDALONE FILES EXIST ON TAGGED VERSIONS ONLY. A host following a moving branch,
+     * and this test bench, have no `dist/` at all — and the publish tag has to stay declared
+     * anyway. An undeclared tag answers "unable to locate publishable resources", which somebody
+     * reads as the package being broken; a declared one reports that it copied nothing, which is
+     * the truth and points at the version they installed.
+     */
+    public function test_the_assets_can_be_published_even_when_they_were_not_built(): void
+    {
+        $this->artisan('vendor:publish', ['--tag' => 'mediahub-assets'])->assertExitCode(0);
+    }
 }

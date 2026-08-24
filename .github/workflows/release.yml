@@ -1,0 +1,75 @@
+name: Release
+
+# THE ONLY THING THAT MAKES A VERSIONED BUILD ARTEFACT HONEST.
+#
+# ⚠️ THE STANDALONE BUNDLE IS COMMITTED, WHICH CONTRADICTS AN OTHERWISE SOUND RULE. It is
+# committed because a Composer package ships what is in the repository and there is no install
+# step that could build anything: an application with no npm can never obtain a file that is not
+# there. Either the artefact is versioned, or the standalone mode does not exist.
+#
+# ⚠️ SO THE CLAIM HAS TO BE CHECKED RATHER THAN TRUSTED. This job rebuilds the bundle from the
+# sources of the tag and compares it with the committed one. A difference fails the release —
+# because a versioned artefact nobody checks is worth less than none: it looks current, it is
+# served to every standalone host, and it can be months behind with nothing reporting it.
+#
+# ⚠️ AND IT RUNS ON TAGS ONLY, deliberately. A branch moves, so a bundle committed to one is
+# stale from the next commit onwards. A tag does not move, which is what makes "the bundle
+# matches the sources" a property of something rather than a hope.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: The bundle matches the sources
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ⚠️ A TAG WITHOUT A BUNDLE IS A RELEASE THAT SILENTLY HAS NO STANDALONE MODE. The host
+      # installs it, the API answers, and the page renders nothing at all — which reads as a
+      # broken package rather than as a missing file.
+      - name: Refuse a release with no bundle
+        run: |
+          for file in dist/mediahub.js dist/mediahub.css; do
+            if [ ! -f "$file" ]; then
+              echo "::error::$file is missing from this tag. Build it and commit it with the release."
+              exit 1
+            fi
+          done
+
+      - name: Keep what was committed
+        run: mv dist committed
+
+      - name: Build it again from the sources
+        run: npm run build
+
+      # ⚠️ COMPARED BYTE FOR BYTE. Comparing sizes, or a handful of markers, passes on a bundle
+      # built from a different commit — which is exactly the case this exists to catch.
+      - name: Compare
+        run: |
+          if diff -r committed dist > /dev/null 2>&1; then
+            echo "The committed bundle matches the sources of this tag."
+            exit 0
+          fi
+
+          echo "::error::The committed bundle does not match the sources of this tag."
+          echo
+          echo "Rebuild it and amend the release:"
+          echo "  npm run build && git add -f dist && git commit --amend"
+          echo
+          diff -r committed dist | head -40
+          exit 1
