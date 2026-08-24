@@ -86,6 +86,45 @@ than something to argue away. Three things decided it:
   the only thing that makes a versioned artefact honest, and without it this mode would not be
   worth having.
 
+### Cutting a release
+
+The bundle is ignored on branches and force-added at the tag. `main` therefore never carries
+build output, and the tag carries a complete, installable tree.
+
+```bash
+git checkout -b release-vX.Y.Z main
+npm run build
+git add -f dist
+git commit -m 'Release vX.Y.Z'
+git tag -a vX.Y.Z -m 'vX.Y.Z'
+git push origin vX.Y.Z          # the tag only — the branch is never pushed
+```
+
+⚠️ **Push the tag, not the branch.** `main` is protected and refuses a direct push anyway, but
+the reason is not the protection: a release commit on a branch would put build output on
+something that keeps moving, and the artefact would be stale from the next commit onwards.
+
+The release job then rebuilds from the sources of that tag and compares byte for byte. If it
+fails, the artefact is behind its code: rebuild, amend, and move the tag.
+
+#### What was measured
+
+The check was cut against itself before being trusted, because a job that has only ever passed is
+indistinguishable from one that cannot fail.
+
+- A tag whose bundle was built from its own sources: **passed**.
+- A tag where a comment changed and the bundle was not rebuilt: **passed** — and correctly.
+  Comments do not survive minification, so the committed artefact really was current. The first
+  attempt at proving the guard was the flawed one, not the guard.
+- A tag where a default address changed and the bundle was not rebuilt: **failed**, naming the
+  files and printing the difference.
+
+⚠️ **That middle case is worth keeping in mind.** The job compares build output, not sources,
+so it answers "is this artefact what these sources produce" and not "was it built from this
+commit". Those differ only where a change produces identical output — which is precisely when the
+distinction does not matter.
+
+
 ### The two published files are not the same kind of thing
 
 `vendor:publish --tag=mediahub-assets` copies two files into `public/vendor/mediahub`. They look
