@@ -1,0 +1,64 @@
+{
+    "name": "kryption/laravel-mediahub",
+    "description": "Multi-tenant media library for Laravel: folder tree, trash, quotas, derivatives, streamed archives and signed URLs.",
+    "type": "library",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Kryption SASU",
+            "homepage": "https://github.com/Kryption-SASU"
+        }
+    ],
+    "keywords": [
+        "laravel",
+        "media",
+        "media-library",
+        "dam",
+        "swift",
+        "s3"
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/bus": "^12.0 || ^13.0",
+        "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/filesystem": "^12.0 || ^13.0",
+        "illuminate/http": "^12.0 || ^13.0",
+        "illuminate/queue": "^12.0 || ^13.0",
+        "illuminate/support": "^12.0 || ^13.0",
+        "illuminate/translation": "^12.0 || ^13.0",
+        "maennchen/zipstream-php": "^3.1"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "phpunit/phpunit": "^11.0 || ^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Kryption\\MediaHub\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Kryption\\MediaHub\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Kryption\\MediaHub\\MediaHubServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "suggest": {
+        "ext-gd": "To build thumbnails for the common image formats (default driver).",
+        "ext-imagick": "For the formats GD cannot read: TIFF, HEIC, PDF."
+    }
+}

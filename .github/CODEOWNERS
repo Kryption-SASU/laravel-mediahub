@@ -1,0 +1,7 @@
+# Any change requests a review from the repository owner.
+#
+# ⚠️ THIS FILE PROTECTS NOTHING ON ITS OWN. It REQUESTS a review; the branch rule is what
+# REQUIRES one. With a single maintainer the rule asks for zero approvals — because nobody may
+# approve their own pull request — so this file is a notification, not a gate. It is kept for
+# the day the project has more than one maintainer.
+* @Lioneldev34

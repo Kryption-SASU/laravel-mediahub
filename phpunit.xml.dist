@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="mediahub">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <!--
+            ⚠️ THE BENCH NEEDS AN APPLICATION KEY. The package's signed addresses depend on it:
+            without one, every test that follows an address fails on an encryption error whose
+            message says nothing about media. This key is fixed and public by construction — it
+            belongs to a test bench, not to an environment.
+        -->
+        <env name="APP_KEY" value="base64:bWVkaWFodWItdGVzdC1iZW5jaC0zMi1ieXRlcy1vayE="/>
+    </php>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>

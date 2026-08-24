@@ -1,0 +1,243 @@
+name: CI
+
+# The matrix IS the promise of the package.
+#
+# ⚠️ THE FLOOR IS LARAVEL 12, AND NOT FOR COMFORT. Laravel 10 and 11 are out of security
+# support: Composer REFUSES to install them, every version carrying open advisories. Supporting
+# them would mean asking users to disable Composer's security policy to install this package.
+#
+# ⚠️ AND LARAVEL 12 REQUIRES PHP 8.2, so the PHP floor follows rather than being chosen.
+#
+# ⚠️ FOUR JOBS, BECAUSE THEY PROVE FOUR DIFFERENT THINGS. Varying PHP proves the package
+# INSTALLS anywhere. Varying image libraries proves format detection DETECTS something — a
+# single image cannot: with a hardcoded format list the suite stays green wherever that list
+# happens to be right, and only an amputated build catches it. Coverage proves the suite did
+# not quietly stop exercising the code. The front job proves the browser side is held to the
+# same floor.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# ⚠️ NO SECRET IS USED ANYWHERE, AND THAT IS A CONDITION OF ACCEPTING CONTRIBUTIONS. Pull
+# requests opened from a fork have no access to them: a pipeline that depended on one would
+# fail for every outside contribution, and the project would stop being open to them without
+# anyone deciding it.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The floor both sides are held to. Raising it is a decision; lowering it should be a
+  # conversation, which is why it appears once, here, rather than in three commands.
+  COVERAGE_FLOOR: '85'
+
+jobs:
+  convention:
+    name: Branch naming
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      # Three segments — type, side, subject:
+      #
+      #     feat/back/chunked-upload          fix/front/thumbnail-race
+      #
+      # ⚠️ THE SIDE IS REQUIRED ONLY WHERE IT MEANS SOMETHING. A change to the pipeline, the
+      # documentation or the licence belongs to neither side, and forcing a choice would make
+      # the answer arbitrary — at which point the segment stops carrying information and becomes
+      # a box to fill. Those types therefore take two segments instead of three.
+      - name: Check the branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          SIDED='^(feat|fix|refactor|perf|test)/(back|front)/[a-z0-9][a-z0-9._-]*$'
+          PLAIN='^(chore|docs|ci)/[a-z0-9][a-z0-9._-]*$'
+
+          if printf '%s' "$BRANCH" | grep -Eq "$SIDED"; then
+            echo "Branch name accepted: $BRANCH"
+            exit 0
+          fi
+
+          if printf '%s' "$BRANCH" | grep -Eq "$PLAIN"; then
+            echo "Branch name accepted: $BRANCH"
+            exit 0
+          fi
+
+          # ⚠️ A NAMING RULE TAXES THE CHEAPEST KIND OF CONTRIBUTION. Fixing a typo through the
+          # GitHub web editor creates a branch called `patch-1`, and nobody about to correct one
+          # word is going to clone the repository to rename it. That prefix is accepted for what
+          # it is: the rule exists to keep intent readable, not to turn away a two-character fix.
+          if printf '%s' "$BRANCH" | grep -Eq '^patch-[0-9]+$'; then
+            echo "::notice::Web-editor branch accepted: $BRANCH"
+            exit 0
+          fi
+
+          echo "::error::Branch \"$BRANCH\" does not follow the convention."
+          echo
+          echo "  feat|fix|refactor|perf|test / back|front / subject"
+          echo "  chore|docs|ci               / subject"
+          echo
+          echo "Examples:"
+          echo "  feat/back/chunked-upload"
+          echo "  fix/front/thumbnail-race"
+          echo "  ci/pin-setup-php"
+          echo
+          echo "Rename it with: git branch -m feat/back/short-subject"
+          exit 1
+
+  portability:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['12.*', '13.*']
+        include:
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
+        exclude:
+          # ⚠️ THIS COMBINATION DOES NOT EXIST. Laravel 13 requires PHP 8.3, so Composer refuses
+          # to resolve and the job fails BEFORE running a single test. The matrix used to
+          # describe a promise that could not be kept: PHP 8.2 is supported, with Laravel 12.
+          - php: '8.2'
+            laravel: '13.*'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: fileinfo, json, mbstring
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Tests
+        run: vendor/bin/phpunit --colors=never
+
+  detection:
+    name: Format detection — ${{ matrix.label }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: GD only
+            extensions: 'fileinfo, json, mbstring, gd'
+          - label: Imagick only
+            extensions: 'fileinfo, json, mbstring, imagick'
+          - label: both
+            extensions: 'fileinfo, json, mbstring, gd, imagick'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ${{ matrix.extensions }}
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      # ⚠️ WHAT THIS MACHINE CAN ACTUALLY DO, before the tests. A library being loaded is not a
+      # library being capable: GD is built à la carte, and ImageMagick advertises formats its
+      # delegates cannot open. Without this trace, a test that fails here and nowhere else is
+      # unreadable.
+      - name: Report real capabilities
+        run: |
+          php -r 'echo "GD: ", extension_loaded("gd") ? "yes" : "no", PHP_EOL;'
+          php -r 'if (extension_loaded("gd")) { foreach (gd_info() as $k => $v) { if (is_bool($v)) { printf("  %-22s %s%s", $k, $v ? "yes" : "no", PHP_EOL); } } }'
+          php -r 'echo "Imagick: ", extension_loaded("imagick") ? "yes" : "no", PHP_EOL;'
+
+      - name: Tests
+        run: vendor/bin/phpunit --colors=never
+
+  coverage:
+    name: PHP coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # ⚠️ PCOV RATHER THAN XDEBUG. Xdebug slows the suite by roughly an order of magnitude, and
+      # a gate that takes ten minutes is a gate people learn to work around. PCOV measures line
+      # coverage, which is what a threshold acts on anyway.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: fileinfo, json, mbstring, gd
+          coverage: pcov
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Tests with coverage
+        run: vendor/bin/phpunit --colors=never --coverage-clover=coverage.xml
+
+      # ⚠️ THE GATE IS A SCRIPT, NOT A FLAG, because PHPUnit has none. Reading the printed
+      # summary instead would break the first time the report format changes — silently, and in
+      # the direction of passing.
+      - name: Coverage floor
+        run: php tools/coverage-gate.php coverage.xml "$COVERAGE_FLOOR"
+
+  front:
+    name: Front tests and coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # ⚠️ THIS JOB ALWAYS RUNS, AND THAT IS DELIBERATE. A required check that never reports
+      # leaves every pull request pending forever, so the check has to exist from the first day
+      # even while there is nothing to run. It decides internally what to do.
+      - name: Is there a front to test?
+        id: front
+        run: |
+          if [ -f package.json ]; then
+            echo "present=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::No package.json yet — the browser side of this package has not been written. This check will start enforcing as soon as it is."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.front.outputs.present == 'yes'
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.front.outputs.present == 'yes'
+        run: npm ci
+
+      # ⚠️ A FRONT WITHOUT A TEST SCRIPT IS A FAILURE, NOT A SKIP. That is the whole point of
+      # the guard above: the day sources appear, they are held to the same floor as the PHP
+      # side, and an omitted script cannot turn this check quietly green.
+      - name: Refuse an untested front
+        if: steps.front.outputs.present == 'yes'
+        run: |
+          node -e "const p=require('./package.json'); if(!p.scripts||!p.scripts['test:coverage']){console.error('package.json has no \"test:coverage\" script — the front cannot be verified.');process.exit(1)}"
+
+      # The floor itself is declared in the Vitest configuration
+      # (`coverage.thresholds.lines`), so that a developer running the suite locally is held to
+      # the same number as the pipeline rather than discovering it on a pull request.
+      - name: Tests with coverage
+        if: steps.front.outputs.present == 'yes'
+        run: npm run test:coverage

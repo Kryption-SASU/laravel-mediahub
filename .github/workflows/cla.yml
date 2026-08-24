@@ -1,0 +1,76 @@
+name: CLA
+
+# THE CONTRIBUTOR AGREEMENT, ASKED FOR ONCE PER PERSON.
+#
+# ⚠️ IT MUST BE IN PLACE BEFORE THE FIRST OUTSIDE CONTRIBUTION IS MERGED, not after.
+# Every contributor keeps the copyright on what they write: without a prior agreement, the
+# project can never change licence or offer a commercial edition again without finding and
+# obtaining the consent of EVERY ONE of them — including those who have become unreachable.
+#
+# ⚠️ `pull_request_target` IS INDISPENSABLE HERE, and it is also a trap worth naming.
+# Unlike `pull_request`, it runs with the HOST repository's token, so contributions coming from
+# a fork can write their signature. The trap: this trigger must NEVER be used to run the pull
+# request's code — that would hand the repository's permissions to anyone. This job checks out
+# no code at all: it only reads comments and writes a signature file.
+#
+# ⚠️ AND IT RUNS THE COPY OF THIS FILE THAT SITS ON THE BASE BRANCH, never the one in the pull
+# request. A change made here therefore cannot be tested by the pull request that makes it: it
+# takes effect only once merged, and the next pull request is the first to exercise it. Expect
+# to fix it blind, and to confirm it afterwards.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, closed]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  agreement:
+    name: Check the contributor agreement
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ask for or verify the signature
+        # ⚠️ does not run on comments unrelated to a pull request: without this guard,
+        # every issue comment would trigger the job.
+        if: (github.event.issue.pull_request || github.event_name == 'pull_request_target')
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-document: 'https://github.com/Kryption-SASU/laravel-mediahub/blob/main/CLA.md'
+
+          # ⚠️ THE SIGNATURES LIVE IN THIS REPOSITORY, not at a third-party service. This
+          # is personal data: entrusting it to an intermediary would add a processor to declare
+          # for something a JSON file is enough to carry.
+          path-to-signatures: '.github/cla/signatures.json'
+
+          # ⚠️ ON A BRANCH OF THEIR OWN, AND NOT ON `main`. The action COMMITS this file, and
+          # `main` refuses every direct push: eleven required checks and a pull request. Pointed
+          # at `main` the job fails with "Repository rule violations found", the signature is
+          # never recorded, and the very first outside contribution can never be merged — the
+          # gate looks present and holds nothing. Measured on this repository before the branch
+          # existed.
+          #
+          # ⚠️ AND `cla-signatures` MUST STAY UNPROTECTED. Protecting it reopens exactly the same
+          # hole, silently.
+          branch: 'cla-signatures'
+
+          remote-organization-name: ''
+          remote-repository-name: ''
+
+          custom-notsigned-prcomment: >
+            Thank you for this contribution. Before it can be merged, the contributor agreement
+            has to be accepted — once, and never asked for again. Read it, then reply to this
+            thread with the sentence below.
+          custom-pr-sign-comment: "I have read the contributor agreement and I accept it."
+          custom-allsigned-prcomment: 'Agreement recorded. Thank you.'
+
+          # The accounts that do not have to sign: the holder itself, and the bots.
+          allowlist: Lioneldev34,bot*,dependabot[bot]
