@@ -1,0 +1,82 @@
+/*
+ * THE TOKENS — the first lever, and the only one most hosts will ever touch.
+ *
+ * ⚠️ IN TAILWIND V4 THEME VALUES *ARE* CUSTOM PROPERTIES. This is not a layer added on top of
+ * the framework; it is the framework's own mechanism. A host redefines a token in one line of
+ * CSS, with no build step, no configuration file and no recompilation of this package.
+ *
+ *     :root { --mh-color-accent: var(--brand-primary); }
+ *
+ * ⚠️ AND THAT LINE WORKS ACROSS A SHADOW BOUNDARY. Custom properties inherit through it, which
+ * is what lets the isolated delivery — where classes deliberately cannot leak in either
+ * direction — still be themed by the page around it.
+ *
+ * ⚠️ NO PREFLIGHT IS IMPORTED HERE, DELIBERATELY. Resetting a host's styles from a dependency
+ * is a fault: they installed a media library, not a new baseline for their whole application.
+ *
+ * ⚠️ AND THE PURGE HAS TO BE TOLD ABOUT US. Tailwind v4 does not scan dependencies. A host
+ * consuming the sources adds one line, and without it every class in the theme table is removed
+ * from the build — which shows up as a screen with no styling at all, and looks like a broken
+ * package rather than a missing directive:
+ *
+ *     @source "../vendor/kryption/laravel-mediahub/resources/js";
+ */
+
+@theme {
+    /* ── Surfaces ─────────────────────────────────────────────────────────── */
+    --mh-color-surface: #ffffff;
+    --mh-color-foreground: #0f172a;
+
+    /*
+     * ⚠️ A LITERAL COLOUR, NOT AN OPACITY MODIFIER. In v4 something like `bg-slate-900/50`
+     * compiles to `color-mix()`, which static contrast analysis cannot resolve — at which point
+     * no text colour satisfies the rule and the warning can only be silenced, never fixed.
+     * Opacity is left to veils and hover states, where nothing is read.
+     */
+    --mh-color-muted: #f1f5f9;
+    --mh-color-muted-foreground: #475569;
+
+    /* ── Emphasis ─────────────────────────────────────────────────────────── */
+    --mh-color-accent: #1d4ed8;
+    --mh-color-accent-foreground: #ffffff;
+
+    --mh-color-danger: #b91c1c;
+    --mh-color-danger-foreground: #ffffff;
+
+    /* ── Shape ────────────────────────────────────────────────────────────── */
+    --mh-radius: 0.375rem;
+}
+
+/*
+ * ⚠️ DARK MODE IS A SET OF TOKENS, NOT A SECOND STYLESHEET. Anything else means every rule
+ * exists twice, and the day one of the two is edited alone the difference shows only to whoever
+ * happens to be in that mode.
+ *
+ * ⚠️ AND IT FOLLOWS THE HOST'S SWITCH, NOT ONLY THE SYSTEM'S. An application with its own
+ * light/dark control sets `data-theme` or a class; honouring only `prefers-color-scheme` would
+ * leave this library bright inside a dark application, which reads as a component that did not
+ * load properly.
+ */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-mh-theme='light']) {
+        --mh-color-surface: #0f172a;
+        --mh-color-foreground: #f8fafc;
+        --mh-color-muted: #1e293b;
+        --mh-color-muted-foreground: #cbd5e1;
+        --mh-color-accent: #3b82f6;
+        --mh-color-accent-foreground: #0b1120;
+        --mh-color-danger: #ef4444;
+        --mh-color-danger-foreground: #0b1120;
+    }
+}
+
+:root[data-mh-theme='dark'] {
+    --mh-color-surface: #0f172a;
+    --mh-color-foreground: #f8fafc;
+    --mh-color-muted: #1e293b;
+    --mh-color-muted-foreground: #cbd5e1;
+    --mh-color-accent: #3b82f6;
+    --mh-color-accent-foreground: #0b1120;
+    --mh-color-danger: #ef4444;
+    --mh-color-danger-foreground: #0b1120;
+}

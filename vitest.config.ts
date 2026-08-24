@@ -1,3 +1,4 @@
+import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vitest/config'
 
 /*
@@ -6,17 +7,39 @@ import { defineConfig } from 'vitest/config'
  * configuration, `npm run test:coverage` refuses locally for the same reason and at the same
  * number.
  *
- * ⚠️ AND THE ENVIRONMENT IS `node`, DELIBERATELY. Nothing in layers 1 and 2 touches the DOM: the
- * upload transport is injected, and Vue's reactivity runs perfectly well without a document. A
- * `jsdom` here would let a DOM dependency slip into code that Angular is meant to consume.
+ * ⚠️ TWO PROJECTS, AND THE SPLIT IS ITSELF A GUARANTEE. Components need a document; layers 1 and
+ * 2 must not. Running everything under a DOM would be simpler and would quietly destroy the one
+ * property that lets an Angular application consume this package: the day something in the core
+ * reaches for `window`, nothing would turn red. Keeping the core in `node` is what makes that
+ * mistake impossible to commit.
  */
 export default defineConfig({
     test: {
-        environment: 'node',
-        include: ['resources/js/**/*.test.ts'],
+        projects: [
+            {
+                test: {
+                    name: 'core',
+                    environment: 'node',
+                    include: [
+                        'resources/js/*.test.ts',
+                        'resources/js/client/**/*.test.ts',
+                        'resources/js/vue/**/*.test.ts',
+                        'resources/js/theme/**/*.test.ts',
+                    ],
+                },
+            },
+            {
+                plugins: [vue()],
+                test: {
+                    name: 'components',
+                    environment: 'happy-dom',
+                    include: ['resources/js/components/**/*.test.ts'],
+                },
+            },
+        ],
         coverage: {
             provider: 'v8',
-            include: ['resources/js/**/*.ts'],
+            include: ['resources/js/**/*.ts', 'resources/js/**/*.vue'],
             exclude: ['resources/js/**/*.test.ts', 'resources/js/**/*.test-utils.ts'],
             /*
              * ⚠️ PER FILE, NOT A SUMMARY. A total above the floor says nothing about which file
