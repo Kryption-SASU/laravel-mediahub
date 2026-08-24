@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, useId } from 'vue'
+import { computed, ref, useId } from 'vue'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 
@@ -24,12 +25,22 @@ const props = withDefaults(
         disabled?: boolean
         ui?: MhComponentOverride
     }>(),
-    { label: 'Add files', hint: undefined, accept: undefined, disabled: false, ui: undefined },
+    { label: undefined, hint: undefined, accept: undefined, disabled: false, ui: undefined },
 )
 
 const emit = defineEmits<{ files: [files: File[]] }>()
 
 const cls = useMediaTheme('dropzone', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    add: props.label ?? t('dropzone.label'),
+}))
 
 const inputId = useId()
 const over = ref(false)
@@ -101,7 +112,7 @@ function onChosen(event: Event): void {
         @dragleave.prevent="onLeave"
         @drop.prevent="onDrop"
     >
-        <label :class="cls('label')" :for="inputId">{{ label }}</label>
+        <label :class="cls('label')" :for="inputId">{{ words.add }}</label>
 
         <input
             :id="inputId"

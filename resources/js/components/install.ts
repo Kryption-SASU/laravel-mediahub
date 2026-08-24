@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import type { App } from 'vue'
 import type { MediaHubClient } from '../client'
+import { createTranslator, mediaTextKey } from '../i18n/context'
+import type { MhTranslator } from '../i18n/context'
 import { mediaThemeKey } from '../theme/context'
 import { defaultTheme } from '../theme/defaults'
 import { mergeTheme } from '../theme/merge'
@@ -10,6 +12,9 @@ import { mediaHubKey } from '../vue/context'
 export interface MediaHubOptions {
     client: MediaHubClient
     theme?: MhThemeOverride
+    /** A shipped language (`en`, `fr`), or a translator of your own. */
+    locale?: string
+    text?: MhTranslator
 }
 
 /**
@@ -28,6 +33,15 @@ export interface MediaHubPlugin {
      * have to recreate the application to change a colour.
      */
     setTheme(theme: MhThemeOverride | undefined): void
+
+    /**
+     * Change the language after installation.
+     *
+     * ⚠️ FOR THE SAME REASON AS THE THEME: `app.provide()` takes a value once and for all, and a
+     * host offering a language switcher would otherwise have to rebuild the application to
+     * change a word.
+     */
+    setLocale(locale: string): void
 }
 
 /**
@@ -41,14 +55,22 @@ export function createMediaHub(options: MediaHubOptions): MediaHubPlugin {
     const override = ref<MhThemeOverride | undefined>(options.theme)
     const theme = computed(() => mergeTheme(defaultTheme, override.value))
 
+    const locale = ref<string>(options.locale ?? 'en')
+    const text: MhTranslator = options.text ?? createTranslator(() => locale.value)
+
     return {
         install(app: App): void {
             app.provide(mediaHubKey, options.client)
             app.provide(mediaThemeKey, theme)
+            app.provide(mediaTextKey, text)
         },
 
         setTheme(next: MhThemeOverride | undefined): void {
             override.value = next
+        },
+
+        setLocale(next: string): void {
+            locale.value = next
         },
     }
 }

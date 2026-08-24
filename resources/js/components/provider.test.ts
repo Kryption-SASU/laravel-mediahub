@@ -104,6 +104,8 @@ describe('the public surface of the components', () => {
         const barrel = await import('./index')
 
         expect(Object.keys(barrel).sort()).toEqual([
+            'MH_DEFAULT_LOCALE',
+            'MH_LOCALES',
             'MhBreadcrumb',
             'MhConfirmDialog',
             'MhContextMenu',
@@ -127,13 +129,17 @@ describe('the public surface of the components', () => {
             'MhUploadQueue',
             'classesOf',
             'createMediaHub',
+            'createTranslator',
             'defaultActions',
             'defaultTheme',
+            'mediaTextKey',
             'mediaThemeKey',
             'mergeTheme',
+            'provideMediaText',
             'provideMediaTheme',
             'useActionRunner',
             'useMediaActionList',
+            'useMediaText',
             'useMediaTheme',
         ])
     })

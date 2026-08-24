@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import type { Media, MediaHubClient } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useMediaBrowser } from '../vue/useMediaBrowser'
@@ -34,16 +35,29 @@ const props = withDefaults(
     }>(),
     {
         client: undefined,
-        confirmLabel: 'Choose',
-        cancelLabel: 'Cancel',
-        searchLabel: 'Search',
-        emptyTitle: 'Nothing here',
+        confirmLabel: undefined,
+        cancelLabel: undefined,
+        searchLabel: undefined,
+        emptyTitle: undefined,
         columns: 4,
         ui: undefined,
     },
 )
 
 const cls = useMediaTheme('mediaPicker', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    confirm: props.confirmLabel ?? t('picker.choose'),
+    cancel: props.cancelLabel ?? t('picker.cancel'),
+    search: props.searchLabel ?? t('picker.search'),
+    empty: props.emptyTitle ?? t('picker.empty'),
+}))
 
 const picker = useMediaPicker()
 const browser = useMediaBrowser(props.client)
@@ -100,7 +114,7 @@ const selectedMedia = computed<Media[]>(() =>
         .filter((item): item is Media => item !== undefined),
 )
 
-const title = computed(() => picker.request.value?.title ?? 'Choose a file')
+const title = computed(() => picker.request.value?.title ?? t('picker.title'))
 
 async function search(): Promise<void> {
     await browser.search(term.value)
@@ -132,7 +146,7 @@ defineExpose({ pick, cancel: picker.cancel, open: picker.open })
             <p :class="cls('title')">{{ title }}</p>
 
             <form :class="cls('search')" role="search" @submit.prevent="search">
-                <label :class="cls('searchLabel')" :for="searchId">{{ searchLabel }}</label>
+                <label :class="cls('searchLabel')" :for="searchId">{{ words.search }}</label>
                 <input
                     :id="searchId"
                     v-model="term"
@@ -154,14 +168,14 @@ defineExpose({ pick, cancel: picker.cancel, open: picker.open })
                 @activate="picker.choose([$event])"
             >
                 <template #empty>
-                    <MhEmptyState :title="emptyTitle" />
+                    <MhEmptyState :title="words.empty" />
                 </template>
             </MhItemGrid>
         </div>
 
         <div :class="cls('actions')">
             <button type="button" :class="cls('cancel')" @click="picker.cancel()">
-                {{ cancelLabel }}
+                {{ words.cancel }}
             </button>
 
             <!-- ⚠️ REFUSED WHILE NOTHING IS CHOSEN. A picker that answers with an empty list on a
@@ -172,7 +186,7 @@ defineExpose({ pick, cancel: picker.cancel, open: picker.open })
                 :disabled="selectedMedia.length === 0"
                 @click="confirm"
             >
-                {{ confirmLabel }}
+                {{ words.confirm }}
             </button>
         </div>
     </dialog>

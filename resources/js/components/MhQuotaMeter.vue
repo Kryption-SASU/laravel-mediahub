@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Quota } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 
@@ -18,10 +19,21 @@ const props = withDefaults(
         unlimitedLabel?: string
         ui?: MhComponentOverride
     }>(),
-    { label: 'Storage used', unlimitedLabel: 'Unlimited', ui: undefined },
+    { label: undefined, unlimitedLabel: undefined, ui: undefined },
 )
 
 const cls = useMediaTheme('quotaMeter', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    label: props.label ?? t('quota.label'),
+    unlimited: props.unlimitedLabel ?? t('quota.unlimited'),
+}))
 
 const unlimited = computed(
     () => props.quota === null || props.quota.unlimited || props.quota.limit === null,
@@ -81,7 +93,7 @@ const summary = computed(() => {
     }
 
     if (unlimited.value) {
-        return readable(quota.used) + ' — ' + props.unlimitedLabel
+        return readable(quota.used) + ' — ' + words.value.unlimited
     }
 
     return readable(quota.used) + ' / ' + readable(quota.limit ?? 0)
@@ -90,7 +102,7 @@ const summary = computed(() => {
 
 <template>
     <div v-if="quota" :class="cls('root')">
-        <p :class="cls('label')">{{ label }}</p>
+        <p :class="cls('label')">{{ words.label }}</p>
 
         <!-- ⚠️ A NATIVE `<meter>`: it carries the role, the range and the value on its own, and a
              browser that renders it its own way is a browser doing something better than we
@@ -101,7 +113,7 @@ const summary = computed(() => {
             :value="percent"
             min="0"
             max="100"
-            :aria-label="label"
+            :aria-label="words.label"
         >
             {{ percent }}%
         </meter>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { MediaHubClient } from '../client'
+import { createTranslator, provideMediaText } from '../i18n/context'
+import type { MhTranslator } from '../i18n/context'
 import { provideMediaTheme } from '../theme/context'
 import type { MhThemeOverride } from '../theme/types'
 import { provideMediaHub } from '../vue/context'
@@ -22,6 +24,10 @@ const props = defineProps<{
      * brand at runtime, has to reach components that are already mounted.
      */
     theme?: MhThemeOverride
+    /** A shipped language (`en`, `fr`). Reactive, like the theme. */
+    locale?: string
+    /** Or an engine of your own — `vue-i18n`, or anything with the same shape. */
+    text?: MhTranslator
 }>()
 
 /*
@@ -33,6 +39,8 @@ const props = defineProps<{
 provideMediaHub(props.client)
 
 provideMediaTheme(() => props.theme)
+
+provideMediaText(props.text ?? createTranslator(() => props.locale))
 </script>
 
 <template>

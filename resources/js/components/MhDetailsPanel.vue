@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import type { Media, MediaHubClient } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useMediaActions } from '../vue/useMediaActions'
@@ -28,9 +29,9 @@ const props = withDefaults(
         ui?: MhComponentOverride
     }>(),
     {
-        nameLabel: 'Name',
-        altLabel: 'Alternative text',
-        saveLabel: 'Save',
+        nameLabel: undefined,
+        altLabel: undefined,
+        saveLabel: undefined,
         client: undefined,
         ui: undefined,
     },
@@ -39,6 +40,18 @@ const props = withDefaults(
 const emit = defineEmits<{ updated: [media: Media] }>()
 
 const cls = useMediaTheme('detailsPanel', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    name: props.nameLabel ?? t('details.name'),
+    alt: props.altLabel ?? t('details.alt'),
+    save: props.saveLabel ?? t('details.save'),
+}))
 
 const actions = useMediaActions(props.client)
 
@@ -137,28 +150,28 @@ async function save(): Promise<void> {
 
         <dl :class="cls('facts')">
             <div :class="cls('fact')">
-                <dt :class="cls('term')">Type</dt>
+                <dt :class="cls('term')">{{ t('details.type') }}</dt>
                 <dd :class="cls('value')">{{ media.mime_type }}</dd>
             </div>
 
             <div :class="cls('fact')">
-                <dt :class="cls('term')">Size</dt>
+                <dt :class="cls('term')">{{ t('details.size') }}</dt>
                 <dd :class="cls('value')">{{ readable(media.size) }}</dd>
             </div>
 
             <div v-if="dimensions" :class="cls('fact')">
-                <dt :class="cls('term')">Dimensions</dt>
+                <dt :class="cls('term')">{{ t('details.dimensions') }}</dt>
                 <dd :class="cls('value')">{{ dimensions }}</dd>
             </div>
         </dl>
 
         <div :class="cls('field')">
-            <label :class="cls('label')" :for="nameId">{{ nameLabel }}</label>
+            <label :class="cls('label')" :for="nameId">{{ words.name }}</label>
             <input :id="nameId" v-model="name" :class="cls('input')" type="text" />
         </div>
 
         <div :class="cls('field')">
-            <label :class="cls('label')" :for="altId">{{ altLabel }}</label>
+            <label :class="cls('label')" :for="altId">{{ words.alt }}</label>
             <input :id="altId" v-model="alt" :class="cls('input')" type="text" />
         </div>
 
@@ -170,7 +183,7 @@ async function save(): Promise<void> {
             :disabled="!dirty || actions.running.value"
             @click="save"
         >
-            {{ saveLabel }}
+            {{ words.save }}
         </button>
 
         <MhErrorState :error="actions.error.value" />

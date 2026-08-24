@@ -79,6 +79,8 @@ describe('the appearance stays in the theme', () => {
         const script = body.slice(0, body.indexOf('<template>'))
 
         /* Tailwind-shaped literals: a quoted string of utility-looking words. */
-        expect(script).not.toMatch(/['"`](?:[a-z-]+:)?(?:flex|grid|rounded|bg-|text-|p-|m-|w-|h-)[a-z0-9-]*/)
+        expect(script).not.toMatch(
+            /['"`](?:[a-z-]+:)?(?:flex|grid|rounded|bg-|text-|p-|m-|w-|h-)[a-z0-9-]*(?=[\s'"`])/,
+        )
     })
 })

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { resolveMediaHub } from '../vue/context'
@@ -36,7 +37,7 @@ const props = withDefaults(
         x: 0,
         y: 0,
         actions: undefined,
-        label: 'Actions',
+        label: undefined,
         client: undefined,
         ui: undefined,
     },
@@ -45,6 +46,16 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:open': [value: boolean]; done: [action: MhAction] }>()
 
 const cls = useMediaTheme('contextMenu', () => props.ui)
+const t = useMediaText()
+
+/*
+ * ⚠️ A LABEL PROP IS AN EXCEPTION, NOT THE ROUTE. Its default is the translation, so the
+ * ordinary case needs no prop at all and a host changes wording by translating rather than
+ * by passing forty strings through every screen. The prop stays for the one-off.
+ */
+const words = computed(() => ({
+    menu: props.label ?? t('menu.label'),
+}))
 
 const api = resolveMediaHub(props.client)
 
@@ -131,7 +142,7 @@ function onKeydown(event: KeyboardEvent): void {
         ref="root"
         :class="cls('root')"
         role="menu"
-        :aria-label="label"
+        :aria-label="words.menu"
         :style="{ left: `${x}px`, top: `${y}px` }"
         @keydown="onKeydown"
     >
