@@ -230,6 +230,43 @@ produces a site where every picture is silent.
 an alternative text somebody else edited in the meantime, and the loss would be invisible:
 nothing failed, the field simply went back to what that screen happened to be holding.
 
+## The whole screen
+
+```vue
+<MhProvider :client="client">
+    <MhMediaLibrary :actions="myActions" @open="preview" />
+</MhProvider>
+```
+
+That is the entire integration. The component is **wiring and nothing else**: every piece of
+state it shows belongs to a composable, and it makes no request of its own. Had the assembly
+needed to reach past a layer, the layer would have been cut wrong — which is why this screen was
+built last rather than first.
+
+It is also **the component most likely to be replaced**, and that is a supported outcome. A host
+who wants a different screen writes their own version of this one file, on the same composables,
+and keeps every component below it. The wiring is deliberately thin so it can be read as an
+example.
+
+Two behaviours it owns, because nothing below it could:
+
+- ⚠️ **The selection is dropped when the folder changes.** Carrying it across means a batch
+  action runs on files nobody can see any more — and the confirmation names a count rather than
+  the files, so nothing on screen would give it away.
+- ⚠️ **An action refreshes the listing and the quota.** Deleting a gigabyte and leaving the
+  gauge where it was tells somebody the deletion did not work, and they do it again.
+
+The context menu is offered only where there is something to act on: opening an empty box in
+place of the browser's own menu takes something away and gives nothing back.
+
+### Folders
+
+⚠️ **A list of children, not a tree — and that is a limit of the server rather than a
+preference.** Browsing answers with the contents of one folder, so a tree would mean a request per
+branch, or an endpoint that does not exist yet. A component pretending to be a tree would either
+be slow in a way nobody could explain, or show a shape that is not the real one. A real tree is a
+later addition, and it needs the server first.
+
 ## The keyboard
 
 The grid is a listbox with **one tab stop**, and the arrows move inside it. Twenty-four items each

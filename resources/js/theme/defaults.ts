@@ -461,4 +461,103 @@ export const defaultTheme: MhTheme = {
             class: 'bg-[var(--mh-color-accent)] text-[var(--mh-color-accent-foreground)]',
         },
     },
+    breadcrumb: {
+        root: {
+            layout: 'text-sm',
+            class: '',
+        },
+        list: {
+            layout: 'flex flex-wrap items-center gap-1',
+            class: '',
+        },
+        item: {
+            layout: 'flex items-center gap-1',
+            class: '',
+        },
+        link: {
+            layout: 'rounded px-1 underline-offset-2 hover:underline',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        current: {
+            layout: 'px-1 font-medium',
+            class: 'text-[var(--mh-color-foreground)]',
+        },
+        separator: {
+            layout: 'select-none',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+    },
+
+    toolbar: {
+        root: {
+            layout: 'flex flex-wrap items-end gap-3',
+            class: '',
+        },
+        search: {
+            layout: 'flex flex-col gap-1',
+            class: '',
+        },
+        group: {
+            layout: 'flex items-end gap-1',
+            class: '',
+        },
+        label: {
+            layout: 'text-xs font-medium',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        input: {
+            layout: 'rounded-md px-2 py-1 text-sm',
+            class: 'bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+        select: {
+            layout: 'rounded-md px-2 py-1 text-sm',
+            class: 'bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+        direction: {
+            layout: 'rounded-md px-2 py-1 text-sm',
+            class: 'bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)]',
+        },
+    },
+
+    folderList: {
+        root: {
+            layout: 'w-full',
+            class: '',
+        },
+        list: {
+            layout: 'flex flex-wrap gap-2',
+            class: '',
+        },
+        item: {
+            layout: 'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+            class: 'bg-[var(--mh-color-muted)] text-[var(--mh-color-foreground)] hover:opacity-90',
+        },
+        icon: {
+            layout: 'select-none',
+            class: 'text-[var(--mh-color-muted-foreground)]',
+        },
+        name: {
+            layout: 'truncate',
+            class: '',
+        },
+    },
+
+    mediaLibrary: {
+        root: {
+            layout: 'flex flex-col gap-4',
+            class: 'text-[var(--mh-color-foreground)]',
+        },
+        header: {
+            layout: 'flex flex-col gap-3',
+            class: '',
+        },
+        body: {
+            layout: 'flex flex-col gap-4 lg:flex-row lg:items-start',
+            class: '',
+        },
+        main: {
+            layout: 'flex grow flex-col gap-4',
+            class: '',
+        },
+    },
 }
