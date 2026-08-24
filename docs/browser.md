@@ -111,6 +111,71 @@ effect, so key the provider on your tenant if it changes.
 The theme, on the other hand, is reactive: `createMediaHub(...).setTheme(…)` changes the skin of
 everything already on screen, which is what a runtime dark mode needs.
 
+## Media in a form
+
+These two are what a host uses every day, and they are built to be used without thinking about
+them.
+
+```vue
+<MhMediaInput v-model="form.avatar_id" name="avatar_id" :media="post.avatar" :types="['image']" />
+<MhMediaGallery v-model="form.gallery_ids" name="gallery_ids[]" :media="post.gallery" />
+```
+
+**The model carries the identifier, not the object.** That is what a form posts and what you
+store; modelling it as the whole media would make every screen unwrap it before saving, and the
+first one that forgets writes a JSON blob into a foreign key column. The object is available too,
+through `@update:media`, and can be handed in through `:media` so the field shows a preview
+without fetching anything.
+
+**A hidden field carries the value**, so an ordinary Blade form submits with no JavaScript of your
+own. ⚠️ It stays in the payload when empty: a field that vanishes once cleared leaves the server
+unable to tell "unset it" from "this form never had it".
+
+⚠️ **Give the gallery a name with brackets** — `gallery_ids[]` — or a classic form keeps only the
+last value, and six pictures save as one.
+
+**The order of a gallery is its value.** Reordering is done with buttons rather than dragging, and
+that is deliberate for now: drag and drop cannot be operated from a keyboard, is awkward on a
+touch screen, and shipping it first would mean shipping a gallery that a portion of users simply
+cannot reorder. Dragging can be added on top of this later; the reverse could not.
+
+## Choosing a file
+
+```vue
+<MhMediaPicker ref="picker" />
+```
+
+```ts
+const [cover] = await picker.value.pick({ types: ['image'] })
+```
+
+⚠️ **A dismissal resolves with an empty list; it does not reject.** Closing a picker is the most
+ordinary thing anyone does with one, and rejecting would hand an unhandled rejection to whoever
+forgot a `try` around a click on "cancel". By the same reasoning, confirming is refused while
+nothing is chosen — an empty answer to a deliberate confirmation is indistinguishable, to the
+caller, from a dismissal.
+
+It fetches when it opens rather than when it mounts, so a picker sitting beside a form costs
+nothing on the pages nobody opens it from.
+
+## The keyboard
+
+The grid is a listbox with **one tab stop**, and the arrows move inside it. Twenty-four items each
+taking a stop would mean pressing Tab twenty-four times to get past a picker — every screen that
+embedded one would become slower to leave than to use.
+
+| | |
+|---|---|
+| ← → | previous, next |
+| ↑ ↓ | by a row, if the grid was told its `columns`; otherwise by one |
+| Home / End | first, last |
+| Space | choose |
+| Enter | open — in a picker, choose and close |
+| Escape | dismiss |
+
+Dialogs are native `<dialog>` elements, so the focus trap, Escape and the inertness of everything
+behind them come from the browser rather than from code that has to be maintained.
+
 ## Getting hold of it
 
 The package is not published to npm. Its browser sources ship inside the Composer package, and

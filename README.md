@@ -295,7 +295,7 @@ without turning a test red on both sides. See [the browser side](docs/browser.md
 | ✅ | the theme mechanism, the provider, and the primitives |
 | ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
 | ⏳ | per-collection derivative definitions |
-| ⏳ | the picker and the form components |
+| ✅ | the picker, and media in a form — MhMediaInput, MhMediaGallery |
 | ⏳ | the full library screen |
 
 ⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
