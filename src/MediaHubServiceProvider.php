@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Kryption\MediaHub;
 
 use Illuminate\Support\ServiceProvider;
+use Kryption\MediaHub\Support\Remote\GuardedRemoteFetcher;
+use Kryption\MediaHub\Support\Remote\CurlTransport;
+use Kryption\MediaHub\Support\Remote\AddressGuard;
+use Kryption\MediaHub\Contracts\RemoteFetcher;
 use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\ConversionDriver;
@@ -52,6 +56,8 @@ class MediaHubServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->bootRemoteFetcher();
+
         $this->mergeConfigFrom(__DIR__.'/../config/mediahub.php', 'mediahub');
 
         /*
@@ -64,6 +70,48 @@ class MediaHubServiceProvider extends ServiceProvider
         HostSchema::flush();
 
         $this->bindDefaults();
+    }
+
+    /**
+     * FETCHING A FILE FROM A URL, GUARDED.
+     *
+     * ⚠️ BOUND EVEN WHERE THE FEATURE IS OFF. The switch is read where the fetch is asked for,
+     * not here: a container that cannot resolve the contract would fail with "target is not
+     * instantiable", which tells whoever reads it nothing about a configuration flag.
+     *
+     * ⚠️ AND A HOST BINDING THEIR OWN STILL WINS, like every other contract in this package.
+     */
+    private function bootRemoteFetcher(): void
+    {
+        $this->app->bind(RemoteFetcher::class, static function ($app): RemoteFetcher {
+            $remote = (array) $app['config']->get('mediahub.remote', []);
+
+            $guard = new AddressGuard(
+                /* ⚠️ RESOLUTION IS INJECTED so the rules can be tested without a name server. */
+                static function (string $host): array {
+                    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+
+                    if ($records === false) {
+                        return [];
+                    }
+
+                    return array_values(array_filter(array_map(
+                        static fn (array $record): string => (string) ($record['ip'] ?? $record['ipv6'] ?? ''),
+                        $records,
+                    )));
+                },
+                (array) ($remote['schemes'] ?? ['http', 'https']),
+                (array) ($remote['ports'] ?? [80, 443]),
+                (array) ($remote['hosts'] ?? []),
+            );
+
+            return new GuardedRemoteFetcher(
+                $guard,
+                new CurlTransport((int) ($remote['timeout'] ?? 10)),
+                (int) ($remote['max_bytes'] ?? 33_554_432),
+                (int) ($remote['max_redirects'] ?? 3),
+            );
+        });
     }
 
     public function boot(): void

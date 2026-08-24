@@ -59,4 +59,20 @@ return [
     'archive_too_many_files' => 'Trop de fichiers ont été sélectionnés pour un seul téléchargement.',
     'archive_too_large' => 'Cette sélection est trop volumineuse pour être téléchargée en une fois.',
 
+
+    // -- Récupération depuis une adresse web ---------------------------------
+    'remote_disabled' => 'La récupération de fichiers depuis une adresse web est désactivée.',
+    'remote_url_invalid' => 'Cette adresse web est illisible.',
+    'remote_scheme_not_allowed' => 'Seules les adresses commençant par http ou https sont acceptées.',
+    'remote_credentials_not_allowed' => 'Cette adresse web contient un identifiant et un mot de passe.',
+    'remote_port_not_allowed' => 'Cette adresse web utilise un port qui n\'est pas accepté.',
+    'remote_host_not_allowed' => 'Ce site ne figure pas dans la liste des sites acceptés.',
+    'remote_address_not_allowed' => 'Cette adresse web pointe vers un endroit interdit.',
+    'remote_unresolvable' => 'Ce site est introuvable.',
+    'remote_unreachable' => 'Cette adresse web n\'a pas pu être lue.',
+    'remote_too_many_redirects' => 'Cette adresse web redirige trop de fois.',
+    'remote_too_large' => 'Le fichier à cette adresse est trop volumineux.',
+    'remote_empty' => 'Cette adresse a répondu avec un fichier vide.',
+    'remote_unnamed' => 'Cette adresse ne dit pas comment le fichier s\'appelle. Donnez-lui un nom.',
+    'remote_unsupported' => 'Cette installation ne peut pas récupérer de fichier depuis une adresse web.',
 ];

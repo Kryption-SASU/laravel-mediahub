@@ -327,11 +327,49 @@ without turning a test red on both sides. See [the browser side](docs/browser.md
 | ✅ | actions, uploading, quota and details |
 | ✅ | the full library screen — `MhMediaLibrary` |
 | ✅ | per-collection derivative definitions |
-| ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
+| ✅ | `addMediaFromUrl()`, guarded against request forgery |
 
-⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
-request-forgery primitive: without a guard it reaches internal addresses, cloud metadata
-endpoints and anything else the host can see. It will arrive with that guard, or not at all.
+⚠️ **`addMediaFromUrl()` is guarded, and off until you turn it on.**
+
+```php
+// config/mediahub.php
+'remote' => ['enabled' => true],
+```
+
+```php
+$post->addMediaFromUrl('https://example.com/photo.png', 'cover');
+```
+
+Fetching an address somebody else chose is a request-forgery primitive: the server sits inside
+your network and can reach the database, the queue, an admin panel bound to localhost and — on
+every major cloud — a metadata endpoint that hands out credentials to anything that asks. An
+installation that never uses this should not carry its risk, which is why it is off by default.
+
+When it is on, the guard does the following, and a test is written for each as an attack rather
+than as a feature:
+
+| | |
+|---|---|
+| `file://`, `gopher://`, `dict://` | only `http` and `https` |
+| loopback, RFC 1918, link-local, carrier-grade NAT, multicast | refused, IPv4 **and** IPv6 |
+| `169.254.169.254` — cloud metadata | refused |
+| `::ffff:127.0.0.1`, `2002::`, `64:ff9b::` — IPv4 hiding in IPv6 | unwrapped, then refused |
+| DNS rebinding | resolved **once**, and the connection is pinned to the address that was checked |
+| a redirect towards something internal | every hop re-checked, including the last |
+| ports other than 80 and 443 | refused |
+| a response of fifty gigabytes | capped in bytes while it arrives, and in time |
+| `https://user:pass@host/` | refused rather than stripped |
+
+An allow-list of hosts is stronger than all of it, where you know the handful of places you fetch
+from — and the match is exact, because `example.com.attacker.test` ends with `example.com`.
+
+⚠️ **What comes back is treated as an upload, not as something trusted.** The same
+validation runs on the real bytes, the same quota is counted, the same naming and deduplication
+apply. A remote server does not get to decide what its file is by saying so in a header.
+
+⚠️ **The pinning goes through cURL.** A host binding their own `RemoteFetcher` —
+which is supported, and the right answer behind an egress proxy — inherits the whole obligation,
+including that one. The contract says so.
 
 ---
 
