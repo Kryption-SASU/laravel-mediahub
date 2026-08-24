@@ -86,6 +86,56 @@ than something to argue away. Three things decided it:
   the only thing that makes a versioned artefact honest, and without it this mode would not be
   worth having.
 
+### The two published files are not the same kind of thing
+
+`vendor:publish --tag=mediahub-assets` copies two files into `public/vendor/mediahub`. They look
+alike sitting next to each other, and they are not.
+
+| | |
+|---|---|
+| `mediahub.css` | **a default.** Replace it, extend it, or override its tokens. |
+| `mediahub.js` | **the package.** Copied so it can be served, never edited. |
+
+⚠️ **Editing the published JavaScript is the fork this package exists to prevent.** It is
+erased by the next `vendor:publish --force`, and until then the application runs a version that
+no longer matches the package while still reporting its version number — so a bug report against
+it cannot be answered, by us or by anyone. If a component does not do what you need, write your
+own screen on [the composables](browser.md#the-composables); that is a supported route, and it
+survives every upgrade.
+
+### Changing the appearance without a build
+
+**Tokens work here, with no build at all.** Load our stylesheet, then one line of your own after
+it:
+
+```html
+<link rel="stylesheet" href="/vendor/mediahub/mediahub.css">
+<link rel="stylesheet" href="/css/app.css">
+```
+
+```css
+/* app.css */
+:root {
+    --mh-color-accent: var(--brand-primary);
+    --mh-radius: 0.75rem;
+}
+```
+
+Our stylesheet ships **without preflight**, so it resets nothing of yours and the two can sit
+side by side. Colours, radii and dark mode are all tokens, which is why they are the answer for
+this mode.
+
+⚠️ **The class table is not, and this is the one real limit of standalone.** Replacing
+`rounded-md` with `rounded-none` through a theme names a class that **is not in our compiled
+stylesheet**: Tailwind compiled only what our own sources use. The component will carry a class
+name that matches nothing, and nothing will report it — the corner simply stays round.
+
+If you need that lever, you have two honest options, and neither is rebuilding this package:
+
+- write the classes you name into your own stylesheet, or
+- use the **bundled** mode, where your Tailwind build compiles them (add the `@source` line).
+
+
 ---
 
 ## Headless

@@ -1,0 +1,20 @@
+/*
+ * THE STYLESHEET THAT SHIPS WITH THE STANDALONE BUNDLE.
+ *
+ * ⚠️ NO PREFLIGHT, AND THAT IS THE WHOLE REASON THIS FILE EXISTS rather than a plain
+ * `@import "tailwindcss"`. Preflight resets margins, headings, lists and form controls across
+ * the entire document: a host installed a media library, not a new baseline for their
+ * application. Importing the theme and the utilities separately is how Tailwind v4 lets that be
+ * said.
+ *
+ * ⚠️ AND THE SOURCES HAVE TO BE NAMED. Tailwind v4 scans what it is told to scan, and a package
+ * is not scanned by default — so without the line below every class in the default theme is
+ * removed from this build, and the bundle ships a screen with no styling at all.
+ */
+
+@import 'tailwindcss/theme' layer(theme);
+@import 'tailwindcss/utilities' layer(utilities);
+
+@import './mediahub.css';
+
+@source '../js';

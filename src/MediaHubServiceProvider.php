@@ -91,6 +91,17 @@ class MediaHubServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../lang' => $this->app->langPath('vendor/mediahub'),
             ], 'mediahub-lang');
+
+            /*
+             * ⚠️ THE STANDALONE BUNDLE, AND IT IS ABSENT OUTSIDE A RELEASE. It is built when a
+             * version is tagged and committed with it, so a host following a moving branch has
+             * no `dist/` at all. Declaring the publication anyway is deliberate: the command
+             * then reports that it copied nothing, which is a far better answer than an unknown
+             * publish tag for somebody wondering where their screen went.
+             */
+            $this->publishes([
+                __DIR__.'/../dist' => $this->app->publicPath('vendor/mediahub'),
+            ], 'mediahub-assets');
         }
     }
 

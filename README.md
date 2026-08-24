@@ -297,11 +297,12 @@ without turning a test red on both sides. See [the browser side](docs/browser.md
 | ✅ | the browser core — typed client, upload queue, no framework |
 | ✅ | Vue 3 composables — browsing, selection, uploading, actions, picking |
 | ✅ | the theme mechanism, the provider, and the primitives |
-| ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
-| ⏳ | per-collection derivative definitions |
+| ✅ | the standalone bundle, and the tag check that keeps it honest |
 | ✅ | the picker, and media in a form — MhMediaInput, MhMediaGallery |
 | ✅ | actions, uploading, quota and details |
 | ✅ | the full library screen — `MhMediaLibrary` |
+| ⏳ | `addMediaFromUrl()` — deliberately held back, see below |
+| ⏳ | per-collection derivative definitions |
 
 ⚠️ **`addMediaFromUrl()` is missing on purpose.** Fetching a URL the server is handed is a
 request-forgery primitive: without a guard it reaches internal addresses, cloud metadata

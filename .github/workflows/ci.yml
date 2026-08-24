@@ -250,3 +250,11 @@ jobs:
       - name: Tests with coverage
         if: steps.front.outputs.present == 'yes'
         run: npm run test:coverage
+
+      # ⚠️ THE BUNDLE IS BUILT ON EVERY PULL REQUEST, THOUGH IT IS ONLY COMMITTED AT A TAG. A
+      # build that no longer compiles would otherwise be discovered while cutting a release,
+      # which is the worst possible moment: the version is decided, the notes are written, and
+      # the fix is a scramble. Here it is an ordinary red check on the change that caused it.
+      - name: The standalone bundle still builds
+        if: steps.front.outputs.present == 'yes'
+        run: npm run build
