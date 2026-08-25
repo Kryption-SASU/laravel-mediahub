@@ -34,6 +34,13 @@ function bar(props: Record<string, unknown> = {}) {
     })
 }
 
+/** ⚠️ THE ONE THAT ASKS BEFORE ACTING, by its wording rather than its place in a growing row. */
+function trashing(wrapper: ReturnType<typeof mount>) {
+    return wrapper
+        .findAll('[role="toolbar"] button')
+        .filter((one) => one.text() === 'Move to trash')[0]
+}
+
 function menu(props: Record<string, unknown> = {}) {
     return mount(MhContextMenu, {
         props: { open: true, selection: one, client: fakeClient(), ...props },
@@ -72,7 +79,13 @@ describe('one source for the actions', () => {
      * flickers as you work is one people stop trusting.
      */
     it('keeps the single-item entries out of the batch bar', () => {
-        expect(labels(bar(), '[role="toolbar"] button').slice(0, -1)).toEqual(['Move to trash'])
+        /* ⚠️ DOWNLOADING IS THE EXCEPTION, and a deliberate one: it is the single act with an
+         * obvious meaning on a batch of one, and refusing it here would be a rule about our own
+         * state rather than about what somebody asked for. */
+        expect(labels(bar(), '[role="toolbar"] button').slice(0, -1)).toEqual([
+            'Download',
+            'Move to trash',
+        ])
     })
 
     /**
@@ -205,7 +218,11 @@ describe('asking before something irreversible', () => {
     it('asks before trashing', async () => {
         const wrapper = bar()
 
-        await wrapper.findAll('[role="toolbar"] button')[0]?.trigger('click')
+        /* ⚠️ FOUND BY ITS WORDING, NOT BY ITS POSITION. This bar was one entry long when the
+         * bench was written; "Download" has since taken the first place, and a test that clicks
+         * whatever happens to be at the top proves something about a different action every time
+         * the list grows. */
+        await trashing(wrapper)?.trigger('click')
         await nextTick()
 
         expect(wrapper.find('dialog').attributes('aria-label')).toBe('Move to the trash?')
@@ -235,7 +252,7 @@ describe('asking before something irreversible', () => {
         const api = fakeClient()
         const wrapper = bar({ client: api })
 
-        await wrapper.findAll('[role="toolbar"] button')[0]?.trigger('click')
+        await trashing(wrapper)?.trigger('click')
 
         expect(api.calls).toHaveLength(0)
     })
@@ -244,7 +261,7 @@ describe('asking before something irreversible', () => {
         const api = fakeClient()
         const wrapper = bar({ client: api })
 
-        await wrapper.findAll('[role="toolbar"] button')[0]?.trigger('click')
+        await trashing(wrapper)?.trigger('click')
         await nextTick()
         await wrapper.findAll('dialog button')[1]?.trigger('click')
         await nextTick()

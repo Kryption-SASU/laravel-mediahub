@@ -145,6 +145,7 @@ describe('the public surface of the components', () => {
             'provideMediaText',
             'provideMediaTheme',
             'renameTo',
+            'requestArchive',
             'startDownload',
             'useActionRunner',
             'useMediaActionList',

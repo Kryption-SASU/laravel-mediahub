@@ -114,10 +114,30 @@ export function fakeClient(): FakeClient {
         contents: (selection) => record('contents', [selection], contents),
         emptyTrash: () => record('emptyTrash', [], { count: 2 }),
         quota: () => record('quota', [], quota),
+        /**
+         * ⚠️ IT BUILDS THE FIELDS THE REAL CLIENT BUILDS, and returning an empty set was a trap.
+         * A bench checking that a selection reaches the server as a list passed on a form with no
+         * inputs at all: the fixture asserted nothing, quietly, and would have gone on doing so
+         * while the real thing sent one file out of five.
+         */
         archiveRequest: (selection, name) => {
             calls.push({ method: 'archiveRequest', args: [selection, name] })
 
-            return { url: '/media/archive', fields: {} }
+            const fields: Record<string, string[]> = {}
+
+            if (selection.media !== undefined) {
+                fields['media'] = [...selection.media]
+            }
+
+            if (selection.folders !== undefined) {
+                fields['folders'] = [...selection.folders]
+            }
+
+            if (name !== undefined) {
+                fields['name'] = [name]
+            }
+
+            return { url: '/media/archive', fields }
         },
     }
 }
