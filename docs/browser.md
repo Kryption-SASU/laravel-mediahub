@@ -170,6 +170,39 @@ still works, it simply offers less depending on where you clicked.
 <MhContextMenu v-model:open="menuOpen" :selection="selection.asSelection()" :x="x" :y="y" />
 ```
 
+### What ships
+
+| `id` | Offered when |
+|---|---|
+| `preview` | one file, and the screen lent a viewer |
+| `link` | one file — copies the address the server gives for it |
+| `rename` | one file **or one folder** |
+| `duplicate` | one file — the copy lands beside the original, named "… (copy)" |
+| `download` | one file, as itself |
+| `archive` | a folder, or more than one thing — one ZIP of the lot |
+| `trash` · `restore` · `purge` | a non-empty selection; the last two in the trash only |
+
+Two rules run through that table:
+
+- ⚠️ **One file goes as itself, anything else goes as a ZIP.** `download` and `archive` are
+  complementary rather than alternative, so on any selection outside the trash exactly one of
+  them is offered and nobody is left having ticked something they cannot take away.
+- ⚠️ **Everything that acts on a single thing is offered where one thing is being pointed at,
+  and not while a batch is being assembled.** A file cannot be renamed to two names, and
+  duplicating four files is four acts. Reading "one thing is ticked" instead would show `rename`
+  for as long as the batch happened to hold one file and take it away at the second.
+
+`preview` and `rename` are a **surface** rather than a request, and a table of data cannot own
+one. `MhMediaLibrary` lends them through `MhActionSurfaces`; a host rendering `MhContextMenu` on
+a screen of its own is offered neither, rather than two entries that do nothing.
+
+⚠️ **Nothing ever reads an archive into the page.** `requestArchive` submits a form into a hidden
+frame and lets the browser save the answer: a `fetch()` followed by a `blob()` would put a
+streamed ZIP back into the tab's memory and fail on exactly the archives that most needed
+streaming. Same origin means the frame can be read, so a refusal — an archive beyond what the
+server can finish — comes back and is raised like any other failure instead of filling a blank
+tab with JSON.
+
 Actions are **data**, so you can add your own — and yours replace ours by `id` rather than
 appearing beside them:
 
@@ -178,6 +211,8 @@ const actions: MhAction[] = [
     {
         id: 'publish',
         label: 'Publish',
+        /** Optional: SVG path data on a 24 grid, drawn beside the label in both renderers. */
+        icon: ['M12 4v12', 'M8 12l4 4 4-4'],
         available: (selection) => (selection.media?.length ?? 0) > 0,
         confirm: { title: 'Publish these files?' },
         run: (selection) => publish(selection),
@@ -263,8 +298,16 @@ who wants a different screen writes their own version of this one file, on the s
 and keeps every component below it. The wiring is deliberately thin so it can be read as an
 example.
 
-Two behaviours it owns, because nothing below it could:
+```vue
+<MhMediaLibrary :diagnostics="serverSaysDiagnosticsAreOn" />
+```
 
+Behaviours it owns, because nothing below it could:
+
+- ⚠️ **The wait is drawn on the thing being waited for.** The menu and the bar know an act is
+  running and know nothing about where on screen the files it names are; this screen knows the
+  opposite. Half of each is why duplicating a large file used to give no sign at all until the
+  copy appeared — so it got clicked again.
 - ⚠️ **The selection is dropped when the folder changes.** Carrying it across means a batch
   action runs on files nobody can see any more — and the confirmation names a count rather than
   the files, so nothing on screen would give it away.
@@ -273,6 +316,23 @@ Two behaviours it owns, because nothing below it could:
 
 The context menu is offered only where there is something to act on: opening an empty box in
 place of the browser's own menu takes something away and gives nothing back.
+
+### The health report
+
+`:diagnostics` shows one discreet button in the toolbar, and pressing it runs the report — the
+package comparing what its configuration promises against what the machine will actually do.
+
+⚠️ **The flag is the server's, passed through rather than guessed.** `GET diagnostics` is not
+registered unless `mediahub.diagnostics.enabled` is true, so a button drawn on a hunch is one
+that answers 404 — and it would be offered to everybody who can look at a photograph. Read the
+setting on the server and hand it to the screen; two booleans kept in step is a button that
+survives the closing of the door.
+
+⚠️ **It is asked for on the click, never on the mount.** Reading `php.ini` and probing extensions
+every time somebody opens a media library is work nobody asked for.
+
+The sentences come from the server whole. They name directives, measured values and a value to
+set; a screen that turned a key into a sentence would be inventing the numbers on it.
 
 ### Folders
 
