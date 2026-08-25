@@ -1,5 +1,6 @@
 import { MediaHubError } from './errors'
 import type {
+    HealthReport,
     AffectedCount,
     SelectionContents,
     BrowsePage,
@@ -60,6 +61,16 @@ export interface MediaHubClient {
     quota(): Promise<Quota>
 
     archiveRequest(selection: Selection, name?: string): ArchiveRequest
+
+    /**
+     * The health report, when the host has turned it on.
+     *
+     * ⚠️ THE ROUTE DOES NOT EXIST WHEN THEY HAVE NOT, so this answers 404 rather than an empty
+     * report — and that is the honest shape. "Nothing to report" and "nobody may ask" are
+     * different states, and a screen that conflated them would show a clean bill of health for a
+     * machine it never looked at.
+     */
+    diagnostics(): Promise<HealthReport>
 
     /** The absolute URL of a route, for the rare caller that needs to build its own request. */
     url(path: string): string
@@ -255,6 +266,10 @@ export function createMediaHubClient(options: MediaHubClientOptions): MediaHubCl
 
         async quota(): Promise<Quota> {
             return (await request<{ data: Quota }>('GET', 'quota')).data
+        },
+
+        async diagnostics(): Promise<HealthReport> {
+            return (await request<{ data: HealthReport }>('GET', 'diagnostics')).data
         },
 
         /**

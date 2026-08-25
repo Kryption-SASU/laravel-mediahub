@@ -676,6 +676,76 @@ export const defaultTheme: MhTheme = {
         },
     },
 
+    /* ⚠️ THE SAME SHAPE AS THE OTHER WINDOWS ON THIS SCREEN, only wider: what it holds is
+     * sentences rather than a form, and a narrow column of prose is a column nobody finishes. */
+    healthReport: {
+        root: {
+            layout: 'm-auto w-full max-w-2xl rounded-lg p-0 backdrop:bg-black/50',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow-lg',
+        },
+        body: {
+            layout: 'flex max-h-[80vh] flex-col gap-3 overflow-y-auto p-6',
+            class: '',
+        },
+        header: {
+            layout: 'flex items-start justify-between gap-3',
+            class: '',
+        },
+        title: {
+            layout: 'text-base font-semibold',
+            class: '',
+        },
+        close: {
+            layout: 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        icon: {
+            layout: 'h-4 w-4 shrink-0',
+            class: '',
+        },
+        summary: {
+            layout: 'text-sm',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+        list: {
+            layout: 'flex flex-col gap-3',
+            class: '',
+        },
+        entry: {
+            layout: 'flex flex-col gap-1 rounded-md p-3',
+            class: 'bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        checkTitle: {
+            layout: 'text-sm font-medium',
+            class: '',
+        },
+        detail: {
+            layout: 'text-sm',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+        /* ⚠️ SET APART, because it is the only line on the screen that is an instruction. */
+        advice: {
+            layout: 'rounded px-2 py-1 text-sm',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)]',
+        },
+        /*
+         * ⚠️ THE LEVEL IS A WORD AS WELL AS A COLOUR. Colour alone is unreadable to a tenth of
+         * the people looking at it, and to everybody printing the page.
+         */
+        error: {
+            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
+            class: 'bg-[var(--mh-color-danger,#b91c1c)] text-[var(--mh-color-danger-foreground,#ffffff)]',
+        },
+        warning: {
+            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
+            class: 'bg-[var(--mh-color-foreground,#0f172a)] text-[var(--mh-color-surface,#ffffff)]',
+        },
+        ok: {
+            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+    },
+
     uploadQueue: {
         root: {
             layout: 'flex flex-col gap-2 p-3',
@@ -1104,6 +1174,17 @@ export const defaultTheme: MhTheme = {
         trashOn: {
             layout: 'inline-flex h-9 w-9 items-center justify-center rounded-md',
             class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        /* ⚠️ QUIETER THAN THE REST OF THE ROW. It is not part of the work: it is there for
+         * whoever is setting the package up, and it should not compete with the controls
+         * somebody uses all day. */
+        health: {
+            layout: 'inline-flex h-9 w-9 items-center justify-center rounded-md',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        healthIcon: {
+            layout: 'h-5 w-5 shrink-0',
+            class: '',
         },
         trashIcon: {
             layout: 'h-5 w-5',

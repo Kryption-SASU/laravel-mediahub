@@ -116,6 +116,7 @@ describe('the public surface of the components', () => {
             'MhErrorState',
             'MhFolderCreator',
             'MhFolderList',
+            'MhHealthReport',
             'MhItemCard',
             'MhItemGrid',
             'MhLightbox',
