@@ -46,7 +46,20 @@ final class BrowseMedia
             $builder->onlyTrashed();
         }
 
-        if ($query->folder !== null) {
+        /*
+         * ⚠️ A SEARCH LOOKS THROUGH THE WHOLE LIBRARY, NOT THE FOLDER IN FRONT OF YOU. Kept
+         * inside the level, a term typed at the root found only what happened to be lying at the
+         * root — and the files anybody actually goes looking for are the ones that were filed
+         * away. The search answered "nothing" for everything tidy, which reads as the file being
+         * gone rather than as the search being narrow.
+         *
+         * ⚠️ AND THE SCOPE IS NOT WHAT IS BEING LOOSENED HERE. It is a global scope on the model,
+         * applied before any of this: "the whole library" means the whole of the one this caller
+         * is allowed to see, and a term is not a way out of it.
+         */
+        if ($query->search !== null) {
+            $builder->where(Media::column('name'), 'like', '%'.$query->search.'%');
+        } elseif ($query->folder !== null) {
             $builder->atParent('folder_id', $query->folder->getKey());
         } elseif ($query->rootOnly) {
             /*
@@ -55,10 +68,6 @@ final class BrowseMedia
              * flattened, which looks like a leak before it looks like a bug.
              */
             $builder->atParent('folder_id', null);
-        }
-
-        if ($query->search !== null) {
-            $builder->where(Media::column('name'), 'like', '%'.$query->search.'%');
         }
 
         if ($query->types !== []) {
