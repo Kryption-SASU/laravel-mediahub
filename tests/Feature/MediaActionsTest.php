@@ -161,6 +161,78 @@ class MediaActionsTest extends TestCase
         $this->assertStringStartsWith('2026/08/', $copy->path);
     }
 
+    /**
+     * ⚠️ THE COPY IS MARKED, OR IT IS LOST. The file name on disk was already made unique; the
+     * name people read was replicated as it stood, so duplicating gave a second tile with the
+     * same name, in the same folder, with nothing to tell the two apart — and no way afterwards
+     * to know which of them anybody had since edited.
+     */
+    public function test_a_copy_is_named_as_one(): void
+    {
+        $copy = $this->app->make(CopyMedia::class)($this->media(['name' => 'Invoice']));
+
+        $this->assertSame('Invoice (copy)', $copy->name);
+    }
+
+    /**
+     * ⚠️ AND A SECOND COPY IS NUMBERED RATHER THAN SUFFIXED TWICE. Duplicating the same file
+     * three times would otherwise give "Invoice (copy) (copy) (copy)", which is not a name but a
+     * record of how many times somebody clicked.
+     */
+    public function test_a_second_copy_is_numbered(): void
+    {
+        $media = $this->media(['name' => 'Invoice']);
+        $copy = $this->app->make(CopyMedia::class);
+
+        $this->assertSame('Invoice (copy)', $copy($media)->name);
+        $this->assertSame('Invoice (copy 2)', $copy($media)->name);
+        $this->assertSame('Invoice (copy 3)', $copy($media)->name);
+    }
+
+    /**
+     * ⚠️ AND COPYING THE COPY IS NOT THE SAME QUESTION. Its name already ends in the mark, so the
+     * mark is added to that name rather than to the original's — the alternative is a rule that
+     * tries to parse a name back into pieces, and a file somebody deliberately called
+     * "Invoice (copy)" would be renamed behind their back.
+     */
+    public function test_copying_a_copy_marks_the_copy(): void
+    {
+        $media = $this->media(['name' => 'Invoice']);
+        $copy = $this->app->make(CopyMedia::class);
+
+        $second = $copy($copy($media));
+
+        $this->assertSame('Invoice (copy) (copy)', $second->name);
+    }
+
+    /**
+     * ⚠️ THE NUMBERING LOOKS AT THE FOLDER THE COPY LANDS IN, not the one it came from. A copy
+     * sent elsewhere is the first of its name there, and calling it "(copy 4)" because four
+     * exist somewhere else is a number about a place nobody is looking at.
+     */
+    public function test_the_numbering_counts_where_the_copy_lands(): void
+    {
+        $media = $this->media(['name' => 'Invoice']);
+        $target = $this->app->make(CreateFolder::class)('Archives');
+        $copy = $this->app->make(CopyMedia::class);
+
+        $copy($media);
+        $copy($media);
+
+        $this->assertSame('Invoice (copy)', $copy($media, $target)->name);
+    }
+
+    /** ⚠️ THE MARK IS TRANSLATED, because it is written into the row and read for ever after. A
+     * French library whose copies all say "(copy)" can only be fixed by hand, file by file. */
+    public function test_the_mark_follows_the_language(): void
+    {
+        $this->app->setLocale('fr');
+
+        $copy = $this->app->make(CopyMedia::class)($this->media(['name' => 'Facture']));
+
+        $this->assertSame('Facture (copie)', $copy->name);
+    }
+
     public function test_deduplication_does_not_short_circuit_a_copy(): void
     {
         /*
