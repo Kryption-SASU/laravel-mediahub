@@ -132,3 +132,33 @@ describe('what the default skin has to carry itself', () => {
         expect(classesOf(merged, 'confirmDialog', 'root')).toContain('m-auto')
     })
 })
+
+describe('the three listboxes that share a screen', () => {
+    /**
+     * ⚠️ THE FOLDERS, THE FILES AND THE SKELETON STANDING IN FOR BOTH ARE ONE GRID TO THE EYE.
+     * They are three listboxes on purpose — a folder row and a file grid are not the same
+     * choice, and the keyboard has to be able to tell them apart — but they sit one above the
+     * other, so their columns have to line up. Half a tile of drift reads as two grids that
+     * failed to meet, and a skeleton on a different ladder makes the screen jump the moment the
+     * answer arrives.
+     *
+     * ⚠️ THIS IS WHAT KEEPS A DENSITY CHANGE HONEST. Tightening the grid is a one-word edit
+     * repeated three times, which is exactly the kind of edit that gets made twice.
+     */
+    it('are drawn on the same ladder of columns', () => {
+        const ladders = [
+            classesOf(defaultTheme, 'itemGrid', 'root'),
+            classesOf(defaultTheme, 'folderList', 'list'),
+            classesOf(defaultTheme, 'skeleton', 'root'),
+        ].map((classes) =>
+            classes
+                .split(/\s+/)
+                .filter((one) => /(^|:)grid-cols-/.test(one))
+                .join(' '),
+        )
+
+        expect(ladders[0]).not.toBe('')
+        expect(ladders[1]).toBe(ladders[0])
+        expect(ladders[2]).toBe(ladders[0])
+    })
+})

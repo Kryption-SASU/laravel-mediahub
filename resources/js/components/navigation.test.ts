@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MediaHubError } from '../client'
 import { fakeClient, folder } from '../vue/fake.test-utils'
 import MhBreadcrumb from './MhBreadcrumb.vue'
@@ -53,16 +53,179 @@ describe('the breadcrumb', () => {
 })
 
 describe('the toolbar', () => {
-    it('searches on submit rather than on every keystroke', async () => {
+    /**
+     * ⚠️ NOT ONE REQUEST PER KEYSTROKE. Typing "invoice" would otherwise ask for "i", "in",
+     * "inv", "invo", "invoi", "invoic" and "invoice": seven round trips for one term, arriving
+     * in whatever order the network hands them back.
+     */
+    it('asks for nothing while the typing is still going', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+            const field = wrapper.find('input[type="search"]')
+
+            for (const step of ['inv', 'invoi', 'invoice']) {
+                await field.setValue(step)
+                vi.advanceTimersByTime(200)
+            }
+
+            expect(wrapper.emitted('search')).toBeUndefined()
+
+            vi.advanceTimersByTime(300)
+
+            expect(wrapper.emitted('search')).toEqual([['invoice']])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /** ⚠️ AND THE PAUSE IS WHAT ASKS, without anybody having to press anything. */
+    it('searches once the typing pauses', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+
+            await wrapper.find('input[type="search"]').setValue('invoice')
+            vi.advanceTimersByTime(300)
+
+            expect(wrapper.emitted('search')?.[0]).toEqual(['invoice'])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ A TERM TOO SHORT TO BE ONE IS NOT ASKED FOR. A single letter matches most of a library,
+     * so the answer is a page of everything — expensive to produce and useless to read.
+     */
+    it('asks for nothing while the term is shorter than the floor', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+
+            await wrapper.find('input[type="search"]').setValue('i')
+            vi.advanceTimersByTime(600)
+
+            expect(wrapper.emitted('search')).toBeUndefined()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ BUT DELETING BACK UNDER THE FLOOR CLEARS THE SEARCH RATHER THAN FREEZING IT. Otherwise
+     * the results of "invoice" stay on screen next to a box reading "i", and the only way back
+     * to the whole library is to empty the field completely.
+     */
+    it('clears the search when the term is cut back under the floor', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar, { props: { search: 'invoice' } })
+
+            await wrapper.find('input[type="search"]').setValue('i')
+            vi.advanceTimersByTime(300)
+
+            expect(wrapper.emitted('search')?.[0]).toEqual([''])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ THE FLOOR IS A RULE ABOUT TYPING, NOT ABOUT WHAT MAY BE SEARCHED FOR. Enter is somebody
+     * saying they have finished; a one-letter name is a name, and refusing it would be the box
+     * arguing with what it was told.
+     */
+    it('searches for exactly what was typed when it is submitted', async () => {
         const wrapper = mount(MhToolbar)
 
-        await wrapper.find('input[type="search"]').setValue('invoice')
-
-        expect(wrapper.emitted('search')).toBeUndefined()
-
+        await wrapper.find('input[type="search"]').setValue('i')
         await wrapper.find('form').trigger('submit')
 
-        expect(wrapper.emitted('search')?.[0]).toEqual(['invoice'])
+        expect(wrapper.emitted('search')?.[0]).toEqual(['i'])
+    })
+
+    /**
+     * ⚠️ AND SUBMITTING DOES NOT LEAVE THE PAUSE ARMED BEHIND IT. The delay would come due a
+     * moment later with the same box, ask again for a term already answered, and — under the
+     * floor — undo the search Enter had just made.
+     *
+     * ⚠️ THE ANSWER HAS TO COME BACK FOR THIS TO BE VISIBLE, and that is why the prop is set. A
+     * bench that submits and then advances the clock without ever telling the toolbar what it is
+     * now showing certifies the cancelling while proving nothing about it: the pending delay
+     * fires, computes "no term", finds "no term" already on the prop, and stays silent for the
+     * wrong reason. It is once the search is known to be "i" that the stale delay has something
+     * to undo.
+     */
+    it('drops the pending delay when it is submitted', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+
+            await wrapper.find('input[type="search"]').setValue('i')
+            await wrapper.find('form').trigger('submit')
+
+            /* The parent answering, as it does: the term asked for is now the term shown. */
+            await wrapper.setProps({ search: 'i' })
+
+            vi.advanceTimersByTime(600)
+
+            expect(wrapper.emitted('search')).toEqual([['i']])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ AN ANSWER IS NOT A REASON TO ASK AGAIN. The field follows the query, so a search
+     * settling writes back into the box and wakes the watcher: without a comparison against what
+     * is already being shown, the screen would re-ask for its own answer, for ever.
+     */
+    it('does not ask again for the term it is already showing', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+
+            await wrapper.setProps({ search: 'invoice' })
+            vi.advanceTimersByTime(600)
+
+            expect(wrapper.emitted('search')).toBeUndefined()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ A PENDING DELAY DIES WITH THE SCREEN. A timer left running fires into a component nobody
+     * is looking at any more, and in a bench it fires into the next one.
+     *
+     * ⚠️ WHAT IS WATCHED IS THE TIMER ITSELF, NOT WHAT IT WOULD HAVE DONE. Advancing the clock
+     * after an unmount and asking whether anything was emitted answers "no" either way — a
+     * detached component has nobody left to emit to — so the assertion passed identically with
+     * the cleanup removed. The count of timers still standing is the claim being made.
+     */
+    it('drops the pending delay when it goes away', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const wrapper = mount(MhToolbar)
+
+            await wrapper.find('input[type="search"]').setValue('invoice')
+
+            expect(vi.getTimerCount()).toBe(1)
+
+            wrapper.unmount()
+
+            expect(vi.getTimerCount()).toBe(0)
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     /**
