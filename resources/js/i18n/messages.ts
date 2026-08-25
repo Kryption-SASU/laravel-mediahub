@@ -94,6 +94,8 @@ const en: MhMessages = {
 
     'library.empty.description': 'Drop files, or choose them from your computer.',
     'library.empty.title': 'Nothing here yet',
+    'library.trash.description': 'What is thrown away lands here, and can be put back.',
+    'library.trash.title': 'The trash is empty',
     'library.noResults.description': 'Nothing matches what you searched for.',
     'library.noResults.title': 'No results',
 
@@ -128,6 +130,8 @@ const en: MhMessages = {
     'toolbar.done': 'Done',
     'toolbar.search': 'Search',
     'toolbar.select': 'Select',
+    'toolbar.trash': 'Trash',
+    'toolbar.trashLeave': 'Leave the trash',
     'toolbar.sort': 'Sort by',
     'toolbar.sort.created_at': 'Date added',
     'toolbar.sort.name': 'Name',
@@ -213,6 +217,8 @@ const fr: MhMessages = {
 
     'library.empty.description': 'Déposez des fichiers, ou choisissez-les sur votre ordinateur.',
     'library.empty.title': 'Rien ici pour le moment',
+    'library.trash.description': 'Ce qui est jeté arrive ici, et peut en ressortir.',
+    'library.trash.title': 'La corbeille est vide',
     'library.noResults.description': 'Aucun fichier ne correspond à votre recherche.',
     'library.noResults.title': 'Aucun résultat',
 
@@ -247,6 +253,8 @@ const fr: MhMessages = {
     'toolbar.done': 'Terminer',
     'toolbar.search': 'Rechercher',
     'toolbar.select': 'Sélectionner',
+    'toolbar.trash': 'Corbeille',
+    'toolbar.trashLeave': 'Quitter la corbeille',
     'toolbar.sort': 'Trier par',
     'toolbar.sort.created_at': "Date d'ajout",
     'toolbar.sort.name': 'Nom',

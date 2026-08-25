@@ -8,6 +8,7 @@ import type { MhAction } from './actions'
 import MhContextMenu from './MhContextMenu.vue'
 import MhProvider from './MhProvider.vue'
 import MhSelectionBar from './MhSelectionBar.vue'
+import { useMediaActionList } from './actions'
 import { useActionRunner } from './useActionRunner'
 
 const one: Selection = { media: ['m1'] }
@@ -65,14 +66,30 @@ describe('one source for the actions', () => {
     it('names its actions in the language it was given', () => {
         const french = mount(MhProvider, {
             props: { client: fakeClient(), locale: 'fr' },
-            slots: { default: h(MhContextMenu, { open: true, selection: one }) },
+            slots: { default: h(MhContextMenu, { open: true, selection: one, trashed: true }) },
             attachTo: document.body,
         })
 
         expect(labels(french, '[role="menuitem"]')).toEqual([
-            'Mettre à la corbeille',
             'Restaurer',
             'Supprimer définitivement',
+        ])
+    })
+
+    /**
+     * ⚠️ EACH SIDE DROPS THE ONE ENTRY THAT MEANS NOTHING ON IT. Putting away what is already away
+     * is refused by the operation itself; taking back what was never thrown away changes nothing.
+     * Deleting for good is on both, because skipping the trash is a legitimate thing to ask for.
+     */
+    it('drops the entry that means nothing on each side', () => {
+        expect(labels(menu(), '[role="menuitem"]')).toEqual([
+            'Move to trash',
+            'Delete permanently',
+        ])
+
+        expect(labels(menu({ trashed: true }), '[role="menuitem"]')).toEqual([
+            'Restore',
+            'Delete permanently',
         ])
     })
 
@@ -81,11 +98,11 @@ describe('one source for the actions', () => {
     it('asks in that language as well', async () => {
         const french = mount(MhProvider, {
             props: { client: fakeClient(), locale: 'fr' },
-            slots: { default: h(MhContextMenu, { open: true, selection: one }) },
+            slots: { default: h(MhContextMenu, { open: true, selection: one, trashed: true }) },
             attachTo: document.body,
         })
 
-        const purge = french.findAll('[role="menuitem"]')[2]
+        const purge = french.findAll('[role="menuitem"]')[1]
 
         await purge?.trigger('click')
         await nextTick()
@@ -175,7 +192,7 @@ describe('asking before something irreversible', () => {
     /** ⚠️ AN ACTION WITH NOTHING TO ASK RUNS STRAIGHT AWAY — a prompt on "Restore" is noise. */
     it('does not ask about an action that says nothing to ask', async () => {
         const api = fakeClient()
-        const wrapper = bar({ client: api })
+        const wrapper = bar({ client: api, trashed: true })
 
         const restore = wrapper
             .findAll('[role="toolbar"] button')
@@ -185,6 +202,26 @@ describe('asking before something irreversible', () => {
         await nextTick()
 
         expect(api.calls.map((call) => call.method)).toContain('restore')
+    })
+})
+
+describe('the list on its own', () => {
+    /**
+     * ⚠️ A CALLER THAT SAYS NOTHING IS LOOKING AT A LIBRARY, and the default has to be one of the
+     * two: "somewhere unspecified" would make every action either always shown or never. Our own
+     * components always say where they are, so this branch belongs to a host writing its own
+     * screen on the composable — which is a supported route, and therefore one to prove.
+     */
+    it('assumes the library when nobody says where it is', () => {
+        const list = useMediaActionList(fakeClient(), () => one)
+
+        expect(list.available.value.map((action) => action.id)).toEqual(['trash', 'purge'])
+    })
+
+    it('swaps putting away for taking back when told it is the trash', () => {
+        const list = useMediaActionList(fakeClient(), () => one, undefined, () => ({ trashed: true }))
+
+        expect(list.available.value.map((action) => action.id)).toEqual(['restore', 'purge'])
     })
 })
 
@@ -253,9 +290,14 @@ describe('the runner on its own', () => {
 describe('what a deletion says it will take', () => {
     const withFolder: Selection = { folders: ['f1'] }
 
-    async function ask(api: ReturnType<typeof fakeClient>, selection: Selection, wording: string) {
+    async function ask(
+        api: ReturnType<typeof fakeClient>,
+        selection: Selection,
+        wording: string,
+        trashed = false,
+    ) {
         const wrapper = mount(MhSelectionBar, {
-            props: { selection, client: api },
+            props: { selection, client: api, trashed },
             attachTo: document.body,
         })
 

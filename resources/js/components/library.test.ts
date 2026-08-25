@@ -66,6 +66,16 @@ async function pick(wrapper: ReturnType<typeof mount>, positions: number[]): Pro
     await settle()
 }
 
+/**
+ * ⚠️ FOUND BY WHAT IT ANNOUNCES, since it carries no text. It is one glyph everybody recognises,
+ * so the label is what a screen reader — and this bench — has to go on.
+ */
+function trashDoor(wrapper: ReturnType<typeof mount>) {
+    return wrapper
+        .findAll('button')
+        .filter((button) => ['Trash', 'Leave the trash'].includes(button.attributes('aria-label') ?? ''))[0]
+}
+
 async function library(over: Parameters<ReturnType<typeof fakeClient>['answerBrowse']>[0] = {}) {
     const api = fakeClient()
     api.answerBrowse({ media: [media('m1'), media('m2')], folders: [folder('f1')], ...over })
@@ -511,11 +521,14 @@ describe('the library screen', () => {
         await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
         await settle()
 
-        const restore = wrapper
+        /* ⚠️ THE LIBRARY IS NOT THE TRASH, so the only action offered here is the one that puts
+         * something in it. The menu closes before the confirmation opens, which is what this
+         * checks — the two are separate elements. */
+        const trash = wrapper
             .findAll('[role="menuitem"]')
-            .filter((item) => item.text() === 'Restore')[0]
+            .filter((item) => item.text() === 'Move to trash')[0]
 
-        await restore?.trigger('click')
+        await trash?.trigger('click')
         await settle()
 
         expect(wrapper.find('[role="menu"]').exists()).toBe(false)
@@ -568,6 +581,153 @@ describe('the library screen', () => {
         await settle()
 
         expect(detailsOpen(wrapper)).toBe(true)
+    })
+
+    /**
+     * ⚠️ THE TRASH WAS REACHABLE FROM NOWHERE AT ALL. Everything the API needed was already
+     * there — browsing accepts `trashed`, restoring walks a folder's subtree and its ancestors —
+     * and no screen ever asked for it.
+     */
+    it('opens the trash from the toolbar', async () => {
+        const { wrapper, api } = await library()
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        const browsed = api.calls.filter((call) => call.method === 'browse')
+
+        expect((browsed.at(-1)?.args[0] as { trashed?: unknown }).trashed).toBe(true)
+    })
+
+    it('comes back out of it', async () => {
+        const { wrapper, api } = await library()
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        const browsed = api.calls.filter((call) => call.method === 'browse')
+
+        expect((browsed.at(-1)?.args[0] as { trashed?: unknown }).trashed).toBe(false)
+    })
+
+    /**
+     * ⚠️ NOTHING IS ADDED TO A TRASH. Depositing a file there would mean uploading something
+     * already thrown away, and a new folder would be born deleted. Both controls were offered
+     * anyway, and both would have acted: the upload would have landed in the library behind, out
+     * of sight of the screen that accepted it.
+     */
+    it('offers nothing to add once inside the trash', async () => {
+        const { wrapper } = await library()
+
+        expect(wrapper.findComponent(MhUploadButton).exists()).toBe(true)
+        expect(wrapper.findComponent(MhFolderCreator).exists()).toBe(true)
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        expect(wrapper.findComponent(MhUploadButton).exists()).toBe(false)
+        expect(wrapper.findComponent(MhFolderCreator).exists()).toBe(false)
+    })
+
+    /** ⚠️ AND THEY COME BACK ON THE WAY OUT — a door, not a one-way trip. */
+    it('offers them again once out of it', async () => {
+        const { wrapper } = await library()
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        expect(wrapper.findComponent(MhUploadButton).exists()).toBe(true)
+    })
+
+    /**
+     * ⚠️ AND THE WORDLESS CONTROLS STILL HAVE A NAME. A toolbar of glyphs reads as a tool; a
+     * toolbar of glyphs with nothing to announce is a row of unnamed buttons to anybody not
+     * looking at it. The text is hidden by the theme, never taken out of the markup.
+     */
+    it('names the controls that carry no visible text', async () => {
+        const { wrapper } = await library()
+
+        expect(wrapper.findComponent(MhUploadButton).text()).toContain('Add files')
+        expect(wrapper.findComponent(MhFolderCreator).text()).toContain('New folder')
+    })
+
+    /**
+     * ⚠️ EACH SIDE DROPS THE ONE ENTRY THAT MEANS NOTHING ON IT — putting away what is already
+     * away, taking back what was never thrown away. Deleting for good stays on both.
+     */
+    it('swaps putting away for taking back inside the trash', async () => {
+        const { wrapper } = await library()
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
+        await settle()
+
+        expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+            'Move to trash',
+            'Delete permanently',
+        ])
+
+        await wrapper.find('[role="menu"]').trigger('keydown', { key: 'Escape' })
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
+        await settle()
+
+        expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+            'Restore',
+            'Delete permanently',
+        ])
+    })
+
+    /**
+     * ⚠️ CROSSING OVER LETS GO OF EVERYTHING. What was ticked on one side means nothing on the
+     * other — the actions are not even the same — and a batch carried across would act on files
+     * the screen behind it no longer lists.
+     */
+    it('lets go of what was chosen on the way in', async () => {
+        const { wrapper } = await library()
+
+        await pick(wrapper, [0])
+
+        expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    })
+
+    /** ⚠️ AND THE WINDOW WITH IT: the file it was showing is not in this listing. */
+    it('closes the details window on the way in', async () => {
+        const { wrapper } = await library()
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('click')
+        await settle()
+
+        expect(detailsOpen(wrapper)).toBe(true)
+
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        expect(detailsOpen(wrapper)).toBe(false)
+    })
+
+    /**
+     * ⚠️ AN EMPTY TRASH IS NOT AN EMPTY LIBRARY. "Nothing here yet" told somebody looking at one
+     * that they had never uploaded anything.
+     */
+    it('says which emptiness the trash is', async () => {
+        const { wrapper, api } = await library({ media: [], folders: [] })
+
+        api.answerBrowse({ media: [], folders: [] })
+        await trashDoor(wrapper)?.trigger('click')
+        await settle()
+
+        expect(wrapper.text()).toContain('The trash is empty')
     })
 
     it('opens the details of a file that was activated', async () => {

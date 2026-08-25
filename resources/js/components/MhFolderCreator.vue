@@ -119,7 +119,9 @@ async function submit(): Promise<void> {
                 </svg>
             </slot>
 
-            {{ words.trigger }}
+            <!-- ⚠️ HIDDEN BY THE THEME, NOT REMOVED. See `MhUploadButton`: an icon-only control
+                 still needs a name, and real text is the one that cannot drift. -->
+            <span :class="cls('wording')">{{ words.trigger }}</span>
         </button>
 
         <!-- ⚠️ `@cancel.prevent` THEN OUR OWN CLOSE: letting the browser close it natively would
