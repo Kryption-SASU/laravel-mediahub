@@ -11,6 +11,14 @@
  * is what lets the isolated delivery — where classes deliberately cannot leak in either
  * direction — still be themed by the page around it.
  *
+ * ⚠️ AND IT IS OPTIONAL, SINCE 25/08/2026. Every colour in the default theme table now carries
+ * its own value as a `var()` fallback, so a host that never imports this file still gets the
+ * skin it was promised. It used to get nothing: an undefined custom property makes the whole
+ * declaration invalid at computed-value time, so backgrounds went transparent and rings fell
+ * back to `currentColor` — a screen with the right shape and no skin, which reads as a broken
+ * package rather than a missing import. Importing this file is still how a host CHANGES those
+ * values; it is no longer how it gets any.
+ *
  * ⚠️ NO PREFLIGHT IS IMPORTED HERE, DELIBERATELY. Resetting a host's styles from a dependency
  * is a fault: they installed a media library, not a new baseline for their whole application.
  *

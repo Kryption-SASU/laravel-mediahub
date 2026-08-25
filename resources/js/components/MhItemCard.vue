@@ -51,9 +51,14 @@ const rootClasses = computed(() =>
         :aria-posinset="index"
         :tabindex="focused ? 0 : -1"
     >
-        <!-- ⚠️ DECORATIVE, BECAUSE THE NAME IS RIGHT THERE. Left describing itself, a screen
-             reader announces the same file name twice for every item in the grid. -->
-        <MhThumbnail :media="media" :alt="null" size="100%" />
+        <!-- ⚠️ THE FRAME IS WHAT GIVES THE THUMBNAIL A HEIGHT. Asked for `100%` inside a column
+             that has none of its own, the picture falls back to its own dimensions, and a grid
+             of portrait wallpapers beside videos comes out as a staircase. -->
+        <span :class="cls('preview')">
+            <!-- ⚠️ DECORATIVE, BECAUSE THE NAME IS RIGHT THERE. Left describing itself, a screen
+                 reader announces the same file name twice for every item in the grid. -->
+            <MhThumbnail :media="media" :alt="null" size="100%" />
+        </span>
 
         <span :class="cls('name')" :title="media.name">{{ media.name }}</span>
 

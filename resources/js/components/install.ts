@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import type { App } from 'vue'
 import type { MediaHubClient } from '../client'
-import { createTranslator, mediaTextKey } from '../i18n/context'
+import { createTranslator, mediaLocaleKey, mediaTextKey } from '../i18n/context'
 import type { MhTranslator } from '../i18n/context'
 import { mediaThemeKey } from '../theme/context'
 import { defaultTheme } from '../theme/defaults'
@@ -63,6 +63,11 @@ export function createMediaHub(options: MediaHubOptions): MediaHubPlugin {
             app.provide(mediaHubKey, options.client)
             app.provide(mediaThemeKey, theme)
             app.provide(mediaTextKey, text)
+
+            /* ⚠️ THE SAME KEYS AS `MhProvider`, INCLUDING THIS ONE. A plugin that provided one
+             * fewer would give a tree that works under the component and fails under the
+             * plugin — the exact divergence this function exists to prevent. */
+            app.provide(mediaLocaleKey, () => locale.value)
         },
 
         setTheme(next: MhThemeOverride | undefined): void {

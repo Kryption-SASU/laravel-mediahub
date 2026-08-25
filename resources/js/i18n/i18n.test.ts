@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { createTranslator } from './context'
+import { createTranslator, intlLocale } from './context'
 import { MH_LOCALES } from './messages'
 
 describe('the languages this package ships', () => {
@@ -135,5 +135,33 @@ describe('no sentence is written into a component', () => {
         expect(sentences('<template><p>Nothing here yet</p></template>')).toEqual(['Nothing here yet'])
         expect(sentences('<template><p>{{ words.empty }}</p></template>')).toEqual([])
         expect(sentences('<template><!-- A remark in English --><p>{{ x }}</p></template>')).toEqual([])
+    })
+})
+
+describe('a language tag Intl will accept', () => {
+    /**
+     * ⚠️ `fr_FR` IS THE SHAPE PHP AND LARAVEL CARRY EVERYWHERE, and `Intl` throws a `RangeError`
+     * on it — BCP 47 wants a hyphen. A host handing us its application locale would otherwise
+     * take a whole panel down for the sake of a date.
+     */
+    it('accepts the underscore that every PHP application uses', () => {
+        expect(intlLocale('fr_FR')).toBe('fr-FR')
+    })
+
+    it('leaves a tag that was already right alone', () => {
+        expect(intlLocale('fr')).toBe('fr')
+    })
+
+    /** ⚠️ AND ANYTHING UNPARSEABLE BECOMES `undefined`, which `Intl` reads as "use your own". */
+    it('answers nothing rather than throwing on something that is not a tag', () => {
+        expect(intlLocale('not a locale at all')).toBeUndefined()
+        expect(intlLocale('')).toBeUndefined()
+        expect(intlLocale(undefined)).toBeUndefined()
+    })
+
+    /** ⚠️ THE GUARD ITSELF HAS TO BE ABLE TO SAY NO — otherwise it reports every tag as fine. */
+    it('proves it by refusing one', () => {
+        expect(() => new Intl.DateTimeFormat('fr_FR')).toThrow()
+        expect(() => new Intl.DateTimeFormat(intlLocale('fr_FR'))).not.toThrow()
     })
 })

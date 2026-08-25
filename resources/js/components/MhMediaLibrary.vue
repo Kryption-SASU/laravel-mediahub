@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Folder, Media, MediaHubClient, MediaSort, MediaType } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
@@ -14,11 +14,13 @@ import MhContextMenu from './MhContextMenu.vue'
 import MhDetailsPanel from './MhDetailsPanel.vue'
 import MhDropzone from './MhDropzone.vue'
 import MhEmptyState from './MhEmptyState.vue'
+import MhFolderCreator from './MhFolderCreator.vue'
 import MhFolderList from './MhFolderList.vue'
 import MhItemGrid from './MhItemGrid.vue'
 import MhQuotaMeter from './MhQuotaMeter.vue'
 import MhSelectionBar from './MhSelectionBar.vue'
 import MhToolbar from './MhToolbar.vue'
+import MhUploadButton from './MhUploadButton.vue'
 import MhUploadQueue from './MhUploadQueue.vue'
 
 /**
@@ -40,6 +42,12 @@ const props = withDefaults(
         actions?: MhAction[]
         emptyTitle?: string
         emptyDescription?: string
+        /**
+         * ⚠️ WHETHER THIS SCREEN WAS OPENED IN ORDER TO CHOOSE SOMETHING. False by default: a
+         * library reached from a menu has no caller, and a button offering to "use" a file there
+         * hands it to nobody. Set it, listen to `use`, and the details panel offers the button.
+         */
+        selectable?: boolean
         ui?: MhComponentOverride
     }>(),
     {
@@ -47,11 +55,12 @@ const props = withDefaults(
         actions: undefined,
         emptyTitle: undefined,
         emptyDescription: undefined,
+        selectable: false,
         ui: undefined,
     },
 )
 
-const emit = defineEmits<{ open: [media: Media] }>()
+const emit = defineEmits<{ open: [media: Media]; use: [media: Media] }>()
 
 const cls = useMediaTheme('mediaLibrary', () => props.ui)
 const t = useMediaText()
@@ -115,6 +124,40 @@ async function refreshAll(): Promise<void> {
     await quota.refresh()
 }
 
+/*
+ * ⚠️ A FILE THAT LANDED HAS TO APPEAR, AND NOTHING USED TO MAKE IT. The queue reported "done"
+ * and the grid went on showing what it had loaded when the screen opened; the only way to see
+ * the upload was to reload the page, which reads as the upload having failed.
+ */
+const landedBefore = ref(0)
+
+watch(
+    () => upload.uploading.value,
+    async (busy, wasBusy) => {
+        /*
+         * ⚠️ THE COUNT IS TAKEN WHEN THE BATCH STARTS, not compared against zero. `stored` keeps
+         * everything that has ever landed until somebody clears the queue, so "there is
+         * something in it" would also be true of a second batch in which every file was refused.
+         */
+        if (busy) {
+            landedBefore.value = upload.stored.value.length
+
+            return
+        }
+
+        /*
+         * ⚠️ ONE REFRESH PER BATCH, AT THE END — not one per file. Twenty photographs would
+         * otherwise ask for the listing twenty times, each answer arriving after the next
+         * request went out, and the grid would flicker through twenty intermediate states.
+         */
+        if (!wasBusy || upload.stored.value.length <= landedBefore.value) {
+            return
+        }
+
+        await refreshAll()
+    },
+)
+
 function onContextMenu(event: MouseEvent): void {
     /* ⚠️ ONLY WHERE THERE IS SOMETHING TO ACT ON. A menu offering nothing, opened by a right
      * click on the background, replaces the browser's own menu with an empty box. */
@@ -142,8 +185,6 @@ function onFiltered(types: MediaType[]): void {
 <template>
     <section :class="cls('root')" @contextmenu="onContextMenu">
         <header :class="cls('header')">
-            <MhBreadcrumb :trail="browser.breadcrumbs.value" @open="open" />
-
             <MhToolbar
                 :search="browser.query.value.search ?? null"
                 :sort="browser.query.value.sort ?? 'created_at'"
@@ -152,9 +193,27 @@ function onFiltered(types: MediaType[]): void {
                 @search="browser.search($event)"
                 @sort="onSorted"
                 @filter="onFiltered"
-            />
+            >
+                <!-- ⚠️ THE TWO CONTROLS THAT NEED TO KNOW WHERE YOU ARE. Uploading puts files in
+                     the folder on screen and creating one puts it under that same folder; a
+                     toolbar holding either would have to reach for the browser's state, and stop
+                     being a toolbar. It offers the place, this screen fills it. -->
+                <template #start>
+                    <MhUploadButton @files="onFiles" />
 
-            <MhQuotaMeter :quota="quota.quota.value" />
+                    <MhFolderCreator
+                        :parent="browser.folder.value"
+                        :client="client"
+                        @created="refreshAll"
+                    />
+                </template>
+            </MhToolbar>
+
+            <div :class="cls('context')">
+                <MhBreadcrumb :trail="browser.breadcrumbs.value" @open="open" />
+
+                <MhQuotaMeter :quota="quota.quota.value" />
+            </div>
         </header>
 
         <MhSelectionBar
@@ -165,8 +224,6 @@ function onFiltered(types: MediaType[]): void {
             @done="refreshAll"
         />
 
-        <MhDropzone @files="onFiles" />
-
         <MhUploadQueue
             :items="upload.items.value"
             @abort="upload.abort($event)"
@@ -176,23 +233,35 @@ function onFiltered(types: MediaType[]): void {
 
         <div :class="cls('body')">
             <div :class="cls('main')">
-                <MhFolderList :folders="browser.page.value?.folders ?? []" @open="open" />
+                <!-- ⚠️ THE ZONE WRAPS THE LISTING RATHER THAN SITTING ABOVE IT: a file let go
+                     over the files — which is where the hand goes — used to be opened by the
+                     browser, taking the page with it. The keyboard route is the button in the
+                     toolbar, and it is not optional. -->
+                <MhDropzone @files="onFiles">
+                    <MhFolderList :folders="browser.page.value?.folders ?? []" @open="open" />
 
-                <MhItemGrid
-                    v-model:selected="chosen"
-                    :media="browser.page.value?.media ?? []"
-                    multiple
-                    :loading="browser.loading.value"
-                    :error="browser.error.value"
-                    @activate="focused = $event; emit('open', $event)"
-                >
-                    <template #empty>
-                        <MhEmptyState :title="emptyTitle" :description="emptyDescription" />
-                    </template>
-                </MhItemGrid>
+                    <MhItemGrid
+                        v-model:selected="chosen"
+                        :media="browser.page.value?.media ?? []"
+                        multiple
+                        :loading="browser.loading.value"
+                        :error="browser.error.value"
+                        @activate="focused = $event; emit('open', $event)"
+                    >
+                        <template #empty>
+                            <MhEmptyState :title="emptyTitle" :description="emptyDescription" />
+                        </template>
+                    </MhItemGrid>
+                </MhDropzone>
             </div>
 
-            <MhDetailsPanel :media="focused" :client="client" @updated="refreshAll" />
+            <MhDetailsPanel
+                :media="focused"
+                :client="client"
+                :selectable="selectable"
+                @updated="refreshAll"
+                @use="emit('use', $event)"
+            />
         </div>
 
         <MhContextMenu

@@ -34,6 +34,28 @@ function grid(props: Record<string, unknown> = {}) {
     return mount(MhItemGrid, { props: { media: four, ...props }, attachTo: document.body })
 }
 
+describe('one tile in the grid', () => {
+    /**
+     * ⚠️ THE FRAME IS WHAT GIVES THE THUMBNAIL A HEIGHT, and without it the grid is a staircase.
+     * The picture is asked for `100%` of its parent; in a column that has no height of its own
+     * that resolves to the file's own dimensions, so a portrait wallpaper came out as a 450px
+     * tile beside a 60px video — measured on a real library on 25/08/2026.
+     */
+    it('holds the picture in a frame of a fixed shape', () => {
+        const card = grid().findAll('[role="option"]')[0]
+        const frame = card?.find('span')
+
+        /* ⚠️ THE RATIO, NOT THE RATIO'S VALUE. A host moving the default skin to 4:3 is making a
+         * choice; losing the ratio altogether is the defect, and only that should turn this red. */
+        expect(frame?.classes().join(' ')).toMatch(/\baspect-/)
+        expect(frame?.find('img').exists()).toBe(true)
+    })
+
+    it('names the file under it', () => {
+        expect(grid().findAll('[role="option"]')[0]?.text()).toContain('a')
+    })
+})
+
 describe('the grid as a list of options', () => {
     it('announces itself as a listbox of options', () => {
         const wrapper = grid()
