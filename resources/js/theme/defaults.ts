@@ -80,7 +80,7 @@ export const defaultTheme: MhTheme = {
     skeleton: {
         root: {
             layout: 'grid gap-3',
-            class: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+            class: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8',
         },
         item: {
             layout: 'w-full animate-pulse rounded-md',
@@ -217,10 +217,17 @@ export const defaultTheme: MhTheme = {
         /*
          * ⚠️ THE COLUMN COUNT IS SKIN, NOT STRUCTURE. Density is the first thing a host argues
          * with, and leaving it in `layout` would mean restating `grid gap-3` to change it.
+         *
+         * ⚠️ AND THE SAME LADDER IS WRITTEN IN THREE PLACES ON PURPOSE — here, the folders above
+         * the grid, and the skeleton standing in for both while they load. They are three
+         * listboxes, not one, and a host that wants a denser grid than its folder row must be
+         * able to say so. What they may never do is drift: folders half a tile wider than the
+         * files under them read as two grids that failed to line up, and a skeleton on a
+         * different ladder makes the screen jump the moment it arrives.
          */
         root: {
             layout: 'grid gap-3',
-            class: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+            class: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8',
         },
         empty: {
             layout: 'flex items-center justify-center',
@@ -831,7 +838,7 @@ export const defaultTheme: MhTheme = {
         },
         list: {
             layout: 'grid gap-3',
-            class: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+            class: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8',
         },
         /* ⚠️ THE LIST ITEM CARRIES THE POSITIONING, because the tile is a button and the menu
          * cannot live inside one. See `itemCard.root` for the same two classes and the same
