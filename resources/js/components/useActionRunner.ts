@@ -16,6 +16,21 @@ export interface UseActionRunner {
      */
     asking: ShallowRef<MhConfirmation | null>
     running: Ref<boolean>
+    /**
+     * What is being acted on right now, or `null` between acts.
+     *
+     * ⚠️ A BOOLEAN WAS NOT ENOUGH, AND THE DIFFERENCE IS WHAT SOMEBODY SEES. "Something is
+     * happening" can only be drawn in the middle of the screen, over everything, for an act that
+     * usually takes a second; the thing that was asked about can be drawn on itself. Duplicating
+     * a file gave no sign at all until the copy appeared, which on a large file reads as a menu
+     * entry that does nothing.
+     *
+     * ⚠️ AND IT IS SET ONLY WHILE THE ACT RUNS, not while a question is being worked out. Counting
+     * what a folder holds before asking is also slow and also reaches the server, but it ends in a
+     * dialog: marking the folder busy first would say the deletion had started before anybody had
+     * agreed to it.
+     */
+    busy: ShallowRef<Selection | null>
     error: ShallowRef<MediaHubError | null>
 
     /** Runs it, or asks first when the action says to. */
@@ -43,14 +58,18 @@ export function useActionRunner(
     const pending = shallowRef<MhAction | null>(null)
     const asking = shallowRef<MhConfirmation | null>(null)
     const running = ref(false)
+    const busy = shallowRef<Selection | null>(null)
     const error = shallowRef<MediaHubError | null>(null)
 
     async function perform(action: MhAction): Promise<void> {
+        const acting = toValue(selection)
+
         running.value = true
+        busy.value = acting
         error.value = null
 
         try {
-            await action.run(toValue(selection))
+            await action.run(acting)
             onDone?.(action)
         } catch (thrown) {
             /*
@@ -64,6 +83,7 @@ export function useActionRunner(
                     : new MediaHubError(0, null, 'The action could not be carried out.')
         } finally {
             running.value = false
+            busy.value = null
         }
     }
 
@@ -71,6 +91,7 @@ export function useActionRunner(
         pending,
         asking,
         running,
+        busy,
         error,
 
         async request(action: MhAction): Promise<void> {

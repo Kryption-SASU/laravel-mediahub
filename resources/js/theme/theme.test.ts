@@ -105,7 +105,7 @@ describe('what the default skin has to carry itself', () => {
      * fourth one added later is covered the day it is written — a hand-written list of three
      * names would not be, and nobody would notice until a screenshot.
      */
-    it('centres every dialog itself', () => {
+    it('never lets a dialog land in the corner', () => {
         const dialogs = Object.entries(defaultTheme).flatMap(([component, slots]) =>
             Object.entries(slots)
                 .filter(([, style]) => (style.layout ?? '').includes('backdrop:'))
@@ -114,9 +114,16 @@ describe('what the default skin has to carry itself', () => {
 
         expect(dialogs.length).toBeGreaterThan(0)
 
-        expect(
-            dialogs.filter(([, layout]) => !/\bm-auto\b/.test(layout)).map(([where]) => where),
-        ).toEqual([])
+        /*
+         * ⚠️ CENTRED, OR FILLING THE WINDOW — the property is where it lands, not which class
+         * put it there. The viewer is deliberately edge to edge, so demanding `m-auto` of it
+         * would be demanding a margin that has nothing to centre against, and the honest way to
+         * satisfy the rule would have been to weaken it.
+         */
+        const placed = ([, layout]: readonly [string, string]) =>
+            /\bm-auto\b/.test(layout) || (/\bh-full\b/.test(layout) && /\bw-full\b/.test(layout))
+
+        expect(dialogs.filter((one) => !placed(one)).map(([where]) => where)).toEqual([])
     })
 
     /**

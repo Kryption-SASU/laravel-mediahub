@@ -197,6 +197,22 @@ export const defaultTheme: MhTheme = {
             class: 'ring-2 ring-[var(--mh-color-accent,#1d4ed8)]',
         },
         /*
+         * WAITING, DRAWN ON THE THING BEING WAITED FOR.
+         *
+         * ⚠️ IT COVERS THE TILE, WHICH IS ALSO HOW IT MAKES IT INERT. Everything else on the
+         * screen keeps working while one file is copied — that is the point of not veiling the
+         * window — but the file being copied must not be asked to do a second thing at once, and
+         * an overlay that swallows the pointer says so without a `disabled` on four controls.
+         */
+        busy: {
+            layout: 'absolute inset-0 z-20 flex items-center justify-center rounded-md',
+            class: 'bg-black/55 text-white',
+        },
+        spinner: {
+            layout: 'h-7 w-7 animate-spin',
+            class: '',
+        },
+        /*
          * ⚠️ THE FRAME IS WHAT GIVES THE THUMBNAIL A HEIGHT, and without it the grid is a
          * staircase. The thumbnail is asked for `100%` of its parent; in a column with no height
          * of its own that resolves to the picture's own dimensions, so a portrait wallpaper
@@ -374,12 +390,16 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         action: {
-            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
             class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
         },
         destructive: {
-            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
             class: 'bg-[var(--mh-color-danger,#b91c1c)] text-[var(--mh-color-danger-foreground,#ffffff)]',
+        },
+        icon: {
+            layout: 'h-4 w-4 shrink-0',
+            class: '',
         },
         clear: {
             layout: 'ml-auto inline-flex items-center rounded-md px-3 py-2 text-sm',
@@ -393,12 +413,21 @@ export const defaultTheme: MhTheme = {
             class: 'rounded-md bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow-lg ring-1 ring-[var(--mh-color-muted,#f1f5f9)]',
         },
         item: {
-            layout: 'flex w-full items-center rounded px-3 py-2 text-left text-sm disabled:opacity-50',
+            layout: 'flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-sm disabled:opacity-50',
             class: 'hover:bg-[var(--mh-color-muted,#f1f5f9)]',
         },
         destructive: {
-            layout: 'flex w-full items-center rounded px-3 py-2 text-left text-sm disabled:opacity-50',
+            layout: 'flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-sm disabled:opacity-50',
             class: 'text-[var(--mh-color-danger,#b91c1c)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        /*
+         * ⚠️ THE DRAWING DOES NOT SHRINK, AND IT DOES NOT COLOUR ITSELF. `currentColor` is what
+         * makes the destructive entry's icon red without a second entry saying so — and the day a
+         * host recolours the row, the icon follows without being told.
+         */
+        icon: {
+            layout: 'h-4 w-4 shrink-0',
+            class: '',
         },
     },
 
@@ -504,6 +533,116 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         dialog: {
+            layout: 'm-auto w-full max-w-sm rounded-lg p-0 backdrop:bg-black/50',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow-lg',
+        },
+        body: {
+            layout: 'flex flex-col gap-2 p-6',
+            class: '',
+        },
+        title: {
+            layout: 'text-base font-semibold',
+            class: '',
+        },
+        label: {
+            layout: 'text-xs font-medium',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+        input: {
+            layout: 'rounded-md px-3 py-2 text-sm',
+            class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)]',
+        },
+        actions: {
+            layout: 'flex items-center justify-end gap-2 px-6 pb-6',
+            class: '',
+        },
+        cancel: {
+            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium',
+            class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
+        },
+        submit: {
+            layout: 'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+    },
+
+    /*
+     * ONE FILE, AS LARGE AS THE SCREEN ALLOWS.
+     *
+     * ⚠️ THE VEIL IS THE DIALOG'S OWN `::backdrop`, NOT A DIV UNDERNEATH. The element already
+     * sits in the top layer, where nothing on the page can be painted over it and no ancestor's
+     * `overflow` can clip it; a hand-placed sheet has to guess a z-index and loses that argument
+     * eventually.
+     *
+     * ⚠️ AND IT IS DARK, WHICH IS THE ONE PLACE IN THIS LIBRARY THAT IS. A photograph shown
+     * against white is judged against white — the eye reads its own contrast wrong — and every
+     * viewer anybody has ever used has taught them what a full-screen dark ground means.
+     */
+    lightbox: {
+        root: {
+            layout: 'm-0 h-full max-h-none w-full max-w-none border-0 p-0 backdrop:bg-black/80',
+            class: 'bg-transparent text-white',
+        },
+        stage: {
+            layout: 'relative flex h-full w-full flex-col items-center justify-center gap-3 p-4 sm:p-8',
+            class: '',
+        },
+        frame: {
+            layout: 'flex min-h-0 w-full flex-1 items-center justify-center',
+            class: '',
+        },
+        /* ⚠️ `object-contain`, NEVER A CROP: the tile already cropped it once to fit a square. */
+        image: {
+            layout: 'max-h-full max-w-full object-contain',
+            class: '',
+        },
+        sound: {
+            layout: 'w-full max-w-lg',
+            class: '',
+        },
+        document: {
+            layout: 'h-full w-full max-w-4xl rounded-md border-0',
+            class: 'bg-white',
+        },
+        unviewable: {
+            layout: 'flex flex-col items-center gap-4 text-center',
+            class: '',
+        },
+        unviewableIcon: {
+            layout: 'h-16 w-16',
+            class: 'text-white/70',
+        },
+        unviewableText: {
+            layout: 'text-sm',
+            class: 'text-white/70',
+        },
+        save: {
+            layout: 'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium',
+            class: 'bg-white/15 text-white hover:bg-white/25',
+        },
+        /*
+         * ⚠️ THE ONE CONTROL IS ON A GROUND OF ITS OWN. A white cross over a photograph is
+         * invisible on the half of photographs that are pale, and this is the one screen where
+         * what sits underneath the button is entirely out of our hands.
+         */
+        close: {
+            layout: 'absolute top-2 right-2 inline-flex h-10 w-10 items-center justify-center rounded-full sm:top-4 sm:right-4',
+            class: 'bg-black/40 text-white hover:bg-black/60',
+        },
+        icon: {
+            layout: 'h-5 w-5 shrink-0',
+            class: '',
+        },
+        caption: {
+            layout: 'max-w-full truncate text-sm',
+            class: 'text-white/80',
+        },
+    },
+
+    /* ⚠️ THE SAME SHAPE AS THE FOLDER PROMPT, AND THAT IS DELIBERATE. Two prompts asking for one
+     * name should not look like two different applications. */
+    renamer: {
+        root: {
             layout: 'm-auto w-full max-w-sm rounded-lg p-0 backdrop:bg-black/50',
             class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow-lg',
         },
@@ -839,6 +978,16 @@ export const defaultTheme: MhTheme = {
         list: {
             layout: 'grid gap-3',
             class: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8',
+        },
+        /* ⚠️ THE SAME MARK AS A FILE'S. Two spinners of different shapes on one screen, for
+         * one act, read as two different things happening. */
+        busy: {
+            layout: 'absolute inset-0 z-20 flex items-center justify-center rounded-md',
+            class: 'bg-black/55 text-white',
+        },
+        spinner: {
+            layout: 'h-7 w-7 animate-spin',
+            class: '',
         },
         /* ⚠️ THE LIST ITEM CARRIES THE POSITIONING, because the tile is a button and the menu
          * cannot live inside one. See `itemCard.root` for the same two classes and the same

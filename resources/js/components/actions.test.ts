@@ -49,11 +49,30 @@ describe('one source for the actions', () => {
      * whoever notices assumes they misremembered.
      */
     it('offers exactly the same actions in the bar and in the menu', () => {
-        const inBar = labels(bar(), '[role="toolbar"] button').slice(0, -1)
-        const inMenu = labels(menu(), '[role="menuitem"]')
+        /*
+         * ⚠️ THE SAME PLACE, OR THE COMPARISON MEANS NOTHING. The two are asked the same question
+         * — what can be done here — and they only have to answer alike when "here" is the same:
+         * the bar is a batch being assembled and the menu is one thing being pointed at, which
+         * is a real difference and one the entries are entitled to read. What is being checked
+         * is that neither renderer keeps a list of its own.
+         */
+        const inBar = labels(bar({ picking: false }), '[role="toolbar"] button').slice(0, -1)
+        const inMenu = labels(menu({ picking: false }), '[role="menuitem"]')
 
         expect(inMenu).toEqual(inBar)
         expect(inMenu.length).toBeGreaterThan(0)
+    })
+
+    /**
+     * ⚠️ AND THE BAR, WHERE IT REALLY STANDS, OFFERS NONE OF THE SINGLE-ITEM ENTRIES. It only
+     * ever appears while somebody is assembling a batch, and half of these acts have no plural:
+     * a file cannot be renamed to two names, and duplicating four files is four acts. Reading
+     * "one thing is ticked" instead of "a batch is being built" would show "Rename" for as long
+     * as the batch happened to hold a single file and take it away at the second — a menu that
+     * flickers as you work is one people stop trusting.
+     */
+    it('keeps the single-item entries out of the batch bar', () => {
+        expect(labels(bar(), '[role="toolbar"] button').slice(0, -1)).toEqual(['Move to trash'])
     })
 
     /**
@@ -83,13 +102,50 @@ describe('one source for the actions', () => {
      */
     it('drops the entry that means nothing on each side', () => {
         expect(labels(menu(), '[role="menuitem"]')).toEqual([
+            'Copy link',
+            'Duplicate',
+            'Download',
             'Move to trash',
-            'Delete permanently',
         ])
 
         expect(labels(menu({ trashed: true }), '[role="menuitem"]')).toEqual([
             'Restore',
             'Delete permanently',
+        ])
+    })
+
+    /**
+     * ⚠️ DELETING FOR GOOD LEFT THE ORDINARY MENU, and that is the point of having a trash at
+     * all. It used to sit one line under "Move to trash", both destructive, one of them final —
+     * two entries a hurried hand cannot tell apart. Skipping the trash is still possible, from
+     * the trash: one more click, in a place that says what it is.
+     */
+    it('offers no final deletion outside the trash', () => {
+        expect(labels(menu(), '[role="menuitem"]')).not.toContain('Delete permanently')
+        expect(labels(bar(), '[role="toolbar"] button')).not.toContain('Delete permanently')
+    })
+
+    /**
+     * ⚠️ TWO ENTRIES ARE A PLACE, NOT A REQUEST, so they are offered only where there is one to
+     * go to. A host rendering this menu on a screen of its own has no viewer and no prompt;
+     * offering "Preview" there would give them an entry that does nothing, which is how a screen
+     * teaches people to stop reading it.
+     */
+    it('offers what it was lent a surface for, and nothing more', () => {
+        expect(labels(menu(), '[role="menuitem"]')).not.toContain('Preview')
+
+        const lent = menu({ surfaces: { preview: () => {}, rename: () => {} } })
+
+        /* ⚠️ AND AT THE TOP. An action supplied from outside lands at the end of the list, which
+         * would put "Preview" underneath "Move to trash" — the destructive entry in the middle
+         * of the ordinary ones. */
+        expect(labels(lent, '[role="menuitem"]')).toEqual([
+            'Preview',
+            'Copy link',
+            'Rename',
+            'Duplicate',
+            'Download',
+            'Move to trash',
         ])
     })
 
@@ -162,7 +218,14 @@ describe('asking before something irreversible', () => {
     it('asks the same way from the menu', async () => {
         const wrapper = menu()
 
-        await wrapper.findAll('[role="menuitem"]')[0]?.trigger('click')
+        /* ⚠️ FOUND BY ITS WORDING, NOT BY ITS POSITION. This menu was two entries long when the
+         * bench was written and is six now; the first one has been "Copy link" ever since, and
+         * a test that clicks whatever happens to be at the top proves something about a
+         * different action every time the list grows. */
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Move to trash')[0]
+            ?.trigger('click')
         await nextTick()
 
         expect(wrapper.find('dialog').attributes('aria-label')).toBe('Move to the trash?')
@@ -215,11 +278,19 @@ describe('the list on its own', () => {
     it('assumes the library when nobody says where it is', () => {
         const list = useMediaActionList(fakeClient(), () => one)
 
-        expect(list.available.value.map((action) => action.id)).toEqual(['trash', 'purge'])
+        expect(list.available.value.map((action) => action.id)).toEqual([
+            'link',
+            'duplicate',
+            'download',
+            'trash',
+        ])
     })
 
     it('swaps putting away for taking back when told it is the trash', () => {
-        const list = useMediaActionList(fakeClient(), () => one, undefined, () => ({ trashed: true }))
+        const list = useMediaActionList(fakeClient(), () => one, undefined, () => ({
+            trashed: true,
+            picking: false,
+        }))
 
         expect(list.available.value.map((action) => action.id)).toEqual(['restore', 'purge'])
     })
@@ -326,11 +397,12 @@ describe('what a deletion says it will take', () => {
         expect(wrapper.find('dialog').text()).toContain('412 files inside')
     })
 
+    /* ⚠️ FROM THE TRASH, which is the only place that offers it now. */
     it('says as much before deleting one for good', async () => {
         const api = fakeClient()
         api.answerContents({ media: 3, folders: 1 })
 
-        const wrapper = await ask(api, withFolder, 'Delete permanently')
+        const wrapper = await ask(api, withFolder, 'Delete permanently', true)
 
         expect(wrapper.find('dialog').text()).toContain('3 files inside')
     })

@@ -3,6 +3,17 @@ import type { ComputedRef, MaybeRefOrGetter } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import type { MhTranslator } from '../i18n/context'
+import { copyText } from './clipboard'
+import { startDownload } from './download'
+import {
+    DOWNLOAD_GLYPH,
+    DUPLICATE_GLYPH,
+    EYE_GLYPH,
+    LINK_GLYPH,
+    PENCIL_GLYPH,
+    RESTORE_GLYPH,
+    TRASH_GLYPH,
+} from './glyphs'
 
 /**
  * WHAT CAN BE DONE TO A SELECTION, DESCRIBED AS DATA.
@@ -35,6 +46,16 @@ import type { MhTranslator } from '../i18n/context'
 export interface MhActionContext {
     /** Whether the screen is showing the trash. */
     trashed: boolean
+
+    /**
+     * ⚠️ WHETHER SOMEBODY IS BUILDING A BATCH, which is a different question from what they have
+     * ticked so far. Half of these entries act on exactly one thing — a file cannot be renamed
+     * to two names, and duplicating four files is four acts, not one — so they are offered where
+     * one thing is being pointed at and not where a batch is being assembled. Reading "one file
+     * is ticked" instead would put "Rename" in the quick-action bar for as long as the batch
+     * happened to hold a single file, and take it away as soon as a second was added.
+     */
+    picking: boolean
 }
 
 /** What a confirmation puts to somebody. */
@@ -47,6 +68,18 @@ export interface MhAction {
     /** Stable across versions: a host disabling or reordering actions refers to this. */
     id: string
     label: string
+
+    /**
+     * The drawing beside the label, as SVG path data on the 24 grid — see `glyphs.ts`.
+     *
+     * ⚠️ IT BELONGS TO THE ACTION, NOT TO THE MENU. A host adding "Publish" would otherwise have
+     * their entry rendered as the only wordy one in a column of drawings, and the way to fix it
+     * would be to fork both renderers.
+     *
+     * ⚠️ AND IT IS OPTIONAL, because an entry with no drawing is worse than an entry with a bad
+     * one. A host who has none simply gets a label.
+     */
+    icon?: readonly string[]
 
     /**
      * ⚠️ ASKED, NOT ASSUMED. Restoring only makes sense in the trash, purging only on something
@@ -84,6 +117,33 @@ export interface UseMediaActionList {
 
 function isEmpty(selection: Selection): boolean {
     return (selection.media?.length ?? 0) + (selection.folders?.length ?? 0) === 0
+}
+
+/**
+ * THE ONE FILE BEING POINTED AT, OR NOTHING.
+ *
+ * ⚠️ A FOLDER IN THE SELECTION MAKES THE ANSWER NOTHING, rather than being ignored. "Download"
+ * offered on a file and a folder together would quietly download the file and say nothing about
+ * the folder, which is the kind of half-obedience that costs somebody an afternoon.
+ */
+function onlyFile(selection: Selection): string | null {
+    const file = selection.media?.length === 1 ? selection.media[0] : null
+
+    return (selection.folders?.length ?? 0) === 0 ? (file ?? null) : null
+}
+
+/** Exactly one thing, of either kind. */
+function onlyOne(selection: Selection): boolean {
+    return (selection.media?.length ?? 0) + (selection.folders?.length ?? 0) === 1
+}
+
+/**
+ * ⚠️ THE ORDINARY SCREEN: the library, with somebody pointing at one thing rather than building a
+ * batch. Everything that acts on a single item is offered here and nowhere else — the trash
+ * offers two things and means them, and a batch is not a place to rename.
+ */
+function ordinary(where: MhActionContext): boolean {
+    return !where.trashed && !where.picking
 }
 
 /**
@@ -133,6 +193,28 @@ async function warn(
 }
 
 /**
+ * WHAT A SCREEN LENDS TO THE LIST, FOR THE ENTRIES THAT CANNOT BE DATA ALONE.
+ *
+ * ⚠️ TWO OF THESE ACTIONS NEED SOMEWHERE TO HAPPEN. Showing a file full screen and asking for a
+ * new name are not requests to a server; they are surfaces, and a table of data cannot own one.
+ *
+ * ⚠️ THEY ARE LENT RATHER THAN APPENDED, AND THE REASON IS THE ORDER. Actions supplied from the
+ * outside land at the end of the list, which would put "Preview" and "Rename" underneath "Move
+ * to trash" — the destructive entry in the middle of the ordinary ones. Declared here, the whole
+ * list is written once, in the order somebody reads it.
+ *
+ * ⚠️ AND AN ENTRY WHOSE SURFACE IS MISSING IS NOT OFFERED AT ALL. A host rendering the menu on
+ * its own screen has no viewer, so it gets no "Preview" — rather than one that does nothing,
+ * which is how a screen teaches people to stop reading it.
+ */
+export interface MhActionSurfaces {
+    /** Show one file, full screen. */
+    preview?(media: string): void
+    /** Ask for a new name for one file or one folder. */
+    rename?(selection: Selection): void
+}
+
+/**
  * THE ACTIONS THIS PACKAGE SHIPS.
  *
  * ⚠️ THE TRANSLATOR IS AN ARGUMENT, AND IT IS REQUIRED. These labels used to be English strings
@@ -146,11 +228,75 @@ async function warn(
  * would have to special-case it — and a special case in a shared list is how the two renderers
  * start to differ again.
  */
-export function defaultActions(client: MediaHubClient, t: MhTranslator): MhAction[] {
+export function defaultActions(
+    client: MediaHubClient,
+    t: MhTranslator,
+    surfaces: MhActionSurfaces = {},
+): MhAction[] {
     return [
+        {
+            id: 'preview',
+            label: t('actions.preview'),
+            icon: EYE_GLYPH,
+            available: (selection, where) =>
+                surfaces.preview !== undefined && onlyFile(selection) !== null && ordinary(where),
+            run: (selection) => {
+                surfaces.preview?.(onlyFile(selection)!)
+
+                return Promise.resolve()
+            },
+        },
+        {
+            id: 'link',
+            label: t('actions.link'),
+            icon: LINK_GLYPH,
+            available: (selection, where) => onlyFile(selection) !== null && ordinary(where),
+            /*
+             * ⚠️ THE ADDRESS IS ASKED FOR RATHER THAN BUILT. A URL assembled here from an
+             * identifier would be right until the day a host serves its files from elsewhere —
+             * a CDN, a signed route, a disk that answers with its own links — and wrong in a way
+             * nobody notices until somebody pastes one.
+             */
+            run: async (selection) => copyText((await client.show(onlyFile(selection)!)).url),
+        },
+        {
+            id: 'rename',
+            label: t('actions.rename'),
+            icon: PENCIL_GLYPH,
+            /* ⚠️ A FOLDER TOO. It is the one entry here that means the same thing on both, and
+             * leaving it off would make renaming a folder reachable from nowhere. */
+            available: (selection, where) =>
+                surfaces.rename !== undefined && onlyOne(selection) && ordinary(where),
+            run: (selection) => {
+                surfaces.rename?.(selection)
+
+                return Promise.resolve()
+            },
+        },
+        {
+            id: 'duplicate',
+            label: t('actions.duplicate'),
+            icon: DUPLICATE_GLYPH,
+            available: (selection, where) => onlyFile(selection) !== null && ordinary(where),
+            /* ⚠️ NO TARGET MEANS "WHERE IT ALREADY IS". Duplicating is not moving, and the copy
+             * belongs beside the original where somebody can see it happened. */
+            run: (selection) => client.copy(onlyFile(selection)!, null),
+        },
+        {
+            id: 'download',
+            label: t('actions.download'),
+            icon: DOWNLOAD_GLYPH,
+            available: (selection, where) => onlyFile(selection) !== null && ordinary(where),
+            run: async (selection) => {
+                const media = await client.show(onlyFile(selection)!)
+
+                startDownload(media.download_url, media.file_name)
+            },
+        },
         {
             id: 'trash',
             label: t('actions.trash'),
+            icon: TRASH_GLYPH,
             destructive: true,
             confirm: (selection) => warn(client, t, selection, 'trash'),
             available: (selection, where) => !isEmpty(selection) && !where.trashed,
@@ -159,19 +305,27 @@ export function defaultActions(client: MediaHubClient, t: MhTranslator): MhActio
         {
             id: 'restore',
             label: t('actions.restore'),
+            icon: RESTORE_GLYPH,
             available: (selection, where) => !isEmpty(selection) && where.trashed,
             run: (selection) => client.restore(selection),
         },
         {
             id: 'purge',
             label: t('actions.purge'),
+            icon: TRASH_GLYPH,
             destructive: true,
             /*
              * ⚠️ THE ONLY ACTION HERE THAT CANNOT BE UNDONE, and the wording of the question says
              * so rather than asking "are you sure?" — which is what everybody clicks through.
+             *
+             * ⚠️ AND IT LIVES IN THE TRASH ALONE. It used to sit on the ordinary menu beside
+             * "Move to trash", one line apart, both destructive, one of them final: the whole
+             * point of a trash is that the everyday gesture is the reversible one. Skipping it
+             * stays possible — from the trash, which is one extra click and a place that says
+             * what it is.
              */
             confirm: (selection) => warn(client, t, selection, 'purge'),
-            available: (selection) => !isEmpty(selection),
+            available: (selection, where) => !isEmpty(selection) && where.trashed,
             run: (selection) => client.purge(selection),
         },
     ]
@@ -186,6 +340,7 @@ export function useMediaActionList(
     selection: MaybeRefOrGetter<Selection>,
     extra?: MaybeRefOrGetter<MhAction[] | undefined>,
     where?: MaybeRefOrGetter<MhActionContext>,
+    surfaces?: MaybeRefOrGetter<MhActionSurfaces | undefined>,
 ): UseMediaActionList {
     /*
      * ⚠️ READ INSIDE THE COMPUTED, NOT CAPTURED ONCE. The translator closes over the locale the
@@ -195,7 +350,7 @@ export function useMediaActionList(
     const t = useMediaText()
 
     const all = computed<MhAction[]>(() => {
-        const merged = [...defaultActions(client, t)]
+        const merged = [...defaultActions(client, t, toValue(surfaces) ?? {})]
 
         for (const action of toValue(extra) ?? []) {
             const index = merged.findIndex((candidate) => candidate.id === action.id)
@@ -213,10 +368,11 @@ export function useMediaActionList(
     const available = computed<MhAction[]>(() => {
         const current = toValue(selection)
 
-        /* ⚠️ OUTSIDE THE TRASH BY DEFAULT. A caller that says nothing is looking at a library,
-         * which is the ordinary case — and the answer has to be one of the two, since "somewhere
-         * unspecified" would make every action either always shown or never. */
-        const context = toValue(where) ?? { trashed: false }
+        /* ⚠️ OUTSIDE THE TRASH AND NOT MID-BATCH BY DEFAULT. A caller that says nothing is
+         * looking at a library, which is the ordinary case — and the answer has to be one of the
+         * two, since "somewhere unspecified" would make every action either always shown or
+         * never. */
+        const context = toValue(where) ?? { trashed: false, picking: false }
 
         return all.value.filter((action) => action.available?.(current, context) ?? true)
     })

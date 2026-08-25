@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
@@ -7,6 +7,7 @@ import type { MhComponentOverride } from '../theme/types'
 import { resolveMediaHub } from '../vue/context'
 import type { MhAction } from './actions'
 import { useMediaActionList } from './actions'
+import { GLYPH_BOX } from './glyphs'
 import MhConfirmDialog from './MhConfirmDialog.vue'
 import { useActionRunner } from './useActionRunner'
 
@@ -31,13 +32,33 @@ const props = withDefaults(
          * the trash is a fact about the view.
          */
         trashed?: boolean
+        /**
+         * ⚠️ WHETHER SOMEBODY IS BUILDING A BATCH. Half the entries act on exactly one thing —
+         * a file cannot be renamed to two names — and are offered where one thing is being
+         * pointed at rather than where a batch is being assembled. Reading "one is ticked"
+         * instead would show "Rename" for as long as the batch held a single file, and take it
+         * away as soon as a second was added.
+         */
+        picking?: boolean
         client?: MediaHubClient
         ui?: MhComponentOverride
     }>(),
-    { actions: undefined, clearLabel: undefined, trashed: false, client: undefined, ui: undefined },
+    {
+        actions: undefined,
+        clearLabel: undefined,
+        trashed: false,
+        picking: true,
+        client: undefined,
+        ui: undefined,
+    },
 )
 
-const emit = defineEmits<{ clear: []; done: [action: MhAction] }>()
+const emit = defineEmits<{
+    clear: []
+    done: [action: MhAction]
+    /** ⚠️ See `MhContextMenu`: the act is known here, its place on screen is known there. */
+    busy: [selection: Selection | null]
+}>()
 
 const cls = useMediaTheme('selectionBar', () => props.ui)
 const t = useMediaText()
@@ -57,9 +78,14 @@ const { available } = useMediaActionList(
     api,
     () => props.selection,
     () => props.actions,
-    () => ({ trashed: props.trashed }),
+    /* ⚠️ THIS BAR IS THE BATCH, so it says so by default. It only ever appears while somebody
+     * is assembling one; a caller has to go out of its way to claim otherwise. */
+    () => ({ trashed: props.trashed, picking: props.picking }),
 )
 
+/* ⚠️ WATCHED RATHER THAN EMITTED FROM THE HANDLER. The runner clears it in a `finally`, on a
+ * path that also runs when the act failed — reporting from the call site would leave every
+ * ticked tile spinning for ever after an error. */
 const runner = useActionRunner(
     () => props.selection,
     (action) => emit('done', action),
@@ -74,6 +100,11 @@ const count = computed(
  * to somebody who cannot see the highlight; a live region is the only thing that says the tick
  * registered.
  */
+
+watch(
+    () => runner.busy.value,
+    (selection) => emit('busy', selection),
+)
 </script>
 
 <template>
@@ -89,6 +120,25 @@ const count = computed(
                 :disabled="runner.running.value"
                 @click="runner.request(action)"
             >
+                <!-- ⚠️ THE SAME DRAWING AS THE MENU, from the same action. Two renderers holding
+                     their own icon table would show a different picture for one act depending on
+                     where somebody clicked. -->
+                <slot name="icon" :action="action">
+                    <svg
+                        v-if="action.icon"
+                        :class="cls('icon')"
+                        :viewBox="GLYPH_BOX"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path v-for="(drawing, step) in action.icon" :key="step" :d="drawing" />
+                    </svg>
+                </slot>
+
                 {{ action.label }}
             </button>
         </div>

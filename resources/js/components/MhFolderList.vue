@@ -29,9 +29,23 @@ const props = withDefaults(
         picking?: boolean
         /** Identifiers of the folders currently ticked. */
         selected?: readonly string[]
+        /**
+         * The folders something is being done to right now.
+         *
+         * ⚠️ DRAWN ON THE FOLDER RATHER THAN OVER THE SCREEN. Trashing a folder takes its whole
+         * subtree and can be slow; a veil in the middle of the window blocks a library somebody
+         * could still be using and says nothing about which folder it is waiting on.
+         */
+        busy?: readonly string[]
         ui?: MhComponentOverride
     }>(),
-    { label: undefined, picking: false, selected: () => [], ui: undefined },
+    {
+        label: undefined,
+        picking: false,
+        selected: () => [],
+        busy: () => [],
+        ui: undefined,
+    },
 )
 
 const emit = defineEmits<{
@@ -51,6 +65,8 @@ const cls = useMediaTheme('folderList', () => props.ui)
 /* ⚠️ THE TICK FOLLOWS WHAT THE SCREEN HOLDS, not a copy kept here. A second list would go
  * stale the first time somebody cleared the selection from anywhere else. */
 const isChosen = (folder: Folder): boolean => props.selected.includes(folder.id)
+
+const isBusy = (folder: Folder): boolean => props.busy.includes(folder.id)
 
 /* ⚠️ BUILT HERE RATHER THAN IN THE MARKUP. A quoted empty string in a `:class` binding is
  * indistinguishable, to the guard that forbids hardcoded classes, from a utility typed in a
@@ -77,7 +93,7 @@ const words = computed(() => ({
                  browser agrees on: some drop the inner one, some fire both. -->
             <li v-for="folder in folders" :key="folder.id" :class="cls('entry')">
                 <button
-                    v-if="!picking"
+                    v-if="!picking && !isBusy(folder)"
                     type="button"
                     tabindex="-1"
                     :class="cls('menu')"
@@ -105,9 +121,28 @@ const words = computed(() => ({
                     type="button"
                     :class="tileClasses(folder)"
                     :aria-pressed="picking ? isChosen(folder) : undefined"
+                    :aria-busy="isBusy(folder) || undefined"
+                    :disabled="isBusy(folder)"
                     @click="picking ? emit('toggle', folder) : emit('open', folder)"
-                    @contextmenu.prevent.stop="picking || emit('menu', folder, $event)"
+                    @contextmenu.prevent.stop="picking || isBusy(folder) || emit('menu', folder, $event)"
                 >
+                    <!-- ⚠️ THE SAME MARK AS A FILE'S. Two spinners of different shapes on one
+                         screen, for one act, read as two different things happening. -->
+                    <span v-if="isBusy(folder)" :class="cls('busy')">
+                        <svg
+                            :class="cls('spinner')"
+                            :viewBox="GLYPH_BOX"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            aria-hidden="true"
+                        >
+                            <circle cx="12" cy="12" r="9" stroke-opacity="0.3" />
+                            <path d="M21 12a9 9 0 0 0-9-9" />
+                        </svg>
+                    </span>
+
                     <span v-if="isChosen(folder)" :class="cls('tick')" :aria-hidden="true">
                         <svg
                             :class="cls('tickIcon')"

@@ -2,12 +2,14 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { MediaHubError } from '../client'
-import { fakeClient, folder, media } from '../vue/fake.test-utils'
+import { deferred, fakeClient, folder, media } from '../vue/fake.test-utils'
 import MhConfirmDialog from './MhConfirmDialog.vue'
 import MhContextMenu from './MhContextMenu.vue'
 import MhDetailsDialog from './MhDetailsDialog.vue'
 import MhFolderCreator from './MhFolderCreator.vue'
 import MhFolderList from './MhFolderList.vue'
+import MhLightbox from './MhLightbox.vue'
+import MhRenamer from './MhRenamer.vue'
 import MhMediaLibrary from './MhMediaLibrary.vue'
 import MhUploadButton from './MhUploadButton.vue'
 
@@ -64,6 +66,27 @@ async function pick(wrapper: ReturnType<typeof mount>, positions: number[]): Pro
     }
 
     await settle()
+}
+
+/**
+ * AGREEING TO THE QUESTION THAT IS ACTUALLY ON SCREEN.
+ *
+ * ⚠️ THIS SCREEN CARRIES TWO CONFIRMATIONS, one per renderer — the batch bar has its own runner
+ * and so does the context menu — and both are in the tree with their buttons rendered whether or
+ * not they are open. `findAll('dialog button')` therefore answers with the bar's "Confirm" first,
+ * and clicking it does nothing at all: its runner has nothing pending. The act never ran, the
+ * assertion failed, and the failure named the state it was checking rather than the click that
+ * never landed.
+ *
+ * ⚠️ THE OPEN ONE IS THE ONE ASKING. Only one question can be put at a time, so that is the
+ * whole of the rule — and it stays true if a third renderer is ever added.
+ */
+async function agree(wrapper: ReturnType<typeof mount>): Promise<void> {
+    const asking = wrapper
+        .findAll('dialog')
+        .filter((one) => (one.element as HTMLDialogElement).open)[0]
+
+    await asking?.findAll('button').filter((one) => one.text() === 'Confirm')[0]?.trigger('click')
 }
 
 /**
@@ -721,9 +744,16 @@ describe('the library screen', () => {
         await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
         await settle()
 
+        /* ⚠️ THE WHOLE ORDINARY MENU, and the screen is what lends the two entries that are a
+         * surface rather than a request — a bare menu offers neither. Deleting for good is not
+         * here: it belongs to the trash now. */
         expect(wrapper.findAll('[role="menuitem"]').map((item) => item.text())).toEqual([
+            'Preview',
+            'Copy link',
+            'Rename',
+            'Duplicate',
+            'Download',
             'Move to trash',
-            'Delete permanently',
         ])
 
         await wrapper.find('[role="menu"]').trigger('keydown', { key: 'Escape' })
@@ -737,6 +767,202 @@ describe('the library screen', () => {
             'Restore',
             'Delete permanently',
         ])
+    })
+
+    /**
+     * ⚠️ THE MENU ENTRY HAS TO REACH THE SURFACE, and nothing else proves it does. The action
+     * list only knows it was lent a function; that the function opens this screen's viewer, on
+     * the file that was right-clicked rather than on whatever the panel last showed, is a fact
+     * about the wiring — which is the one thing a bench on the list itself cannot see.
+     */
+    it('opens the viewer on the file the menu was opened on', async () => {
+        const { wrapper } = await library({ media: [media('m1'), media('m2')] })
+
+        await wrapper.findAll('[role="option"]')[1]?.trigger('contextmenu')
+        await settle()
+
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Preview')[0]
+            ?.trigger('click')
+        await settle()
+
+        const viewer = wrapper.findComponent(MhLightbox)
+
+        expect((viewer.props('media') as { id: string } | null)?.id).toBe('m2')
+        expect((viewer.find('dialog').element as HTMLDialogElement).open).toBe(true)
+    })
+
+    it('opens the rename prompt on the file the menu was opened on', async () => {
+        const { wrapper } = await library({ media: [media('m1', { name: 'Invoice' })] })
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
+        await settle()
+
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Rename')[0]
+            ?.trigger('click')
+        await settle()
+
+        expect(wrapper.findComponent(MhRenamer).props('target')).toEqual({
+            kind: 'media',
+            id: 'm1',
+            name: 'Invoice',
+        })
+    })
+
+    /**
+     * ⚠️ AND ON A FOLDER, WHICH IS THE HALF THAT WAS REACHABLE FROM NOWHERE. A folder's name
+     * could not be changed at all: the details window is for files, and nothing else offered it.
+     * The kind travels with the target, because the two are renamed through different endpoints.
+     */
+    it('opens the rename prompt on a folder as well', async () => {
+        const { wrapper } = await library({ folders: [folder('f1', { name: 'Clients' })] })
+
+        await folderTile(wrapper, 'Clients')?.trigger('contextmenu')
+        await settle()
+
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Rename')[0]
+            ?.trigger('click')
+        await settle()
+
+        expect(wrapper.findComponent(MhRenamer).props('target')).toEqual({
+            kind: 'folder',
+            id: 'f1',
+            name: 'Clients',
+        })
+    })
+
+
+    /**
+     * ⚠️ NEITHER SIDE COULD SHOW THIS ALONE, which is the whole reason it is wired rather than
+     * drawn. The menu knows an act is running and knows nothing about where on screen the files
+     * it names are; the screen knows the opposite. Half of each is why duplicating a large file
+     * gave no sign at all until the copy appeared.
+     */
+    it('marks the tile it is duplicating, and lets go when it is done', async () => {
+        const api = fakeClient()
+        api.answerBrowse({ media: [media('m1'), media('m2')], folders: [] })
+
+        const held = deferred<unknown>()
+        const holding = { ...api, copy: () => held.promise as Promise<never> }
+
+        const wrapper = mount(MhMediaLibrary, {
+            props: { client: holding },
+            attachTo: document.body,
+        })
+
+        await settle()
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('contextmenu')
+        await settle()
+
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Duplicate')[0]
+            ?.trigger('click')
+        await settle()
+
+        expect(
+            wrapper.findAll('[role="option"]').map((one) => one.attributes('aria-busy')),
+        ).toEqual(['true', undefined])
+
+        held.resolve(media('m1-copy'))
+        await settle()
+
+        expect(
+            wrapper.findAll('[role="option"]').map((one) => one.attributes('aria-busy')),
+        ).toEqual([undefined, undefined])
+    })
+
+    /**
+     * ⚠️ AND A BATCH MARKS EVERY FILE IT NAMES. The wait comes from a second renderer here — the
+     * quick-action bar rather than the menu — and the screen has to listen to both: a mutation
+     * that deafened it to the bar stayed green while the menu's half was covered, which is
+     * exactly the kind of half-wiring that ships.
+     */
+    it('marks every file a batch is working on', async () => {
+        const api = fakeClient()
+        api.answerBrowse({ media: [media('m1'), media('m2'), media('m3')], folders: [] })
+
+        const held = deferred<unknown>()
+        const holding = { ...api, trash: () => held.promise as Promise<never> }
+
+        const wrapper = mount(MhMediaLibrary, {
+            props: { client: holding },
+            attachTo: document.body,
+        })
+
+        await settle()
+        await pick(wrapper, [0, 2])
+
+        await wrapper
+            .findAll('[role="toolbar"] button')
+            .filter((one) => one.text() === 'Move to trash')[0]
+            ?.trigger('click')
+        await settle()
+
+        await agree(wrapper)
+        await settle()
+
+        expect(
+            wrapper.findAll('[role="option"]').map((one) => one.attributes('aria-busy') ?? 'no'),
+        ).toEqual(['true', 'no', 'true'])
+
+        held.resolve({ count: 2 })
+        await settle()
+
+        expect(
+            wrapper.findAll('[role="option"]').map((one) => one.attributes('aria-busy') ?? 'no'),
+        ).toEqual(['no', 'no', 'no'])
+    })
+
+    /**
+     * ⚠️ AND A FOLDER IS MARKED THE SAME WAY. Trashing one takes its whole subtree and is the
+     * slowest act on this screen — the one most in need of a sign that something is happening —
+     * and it travels through a different component from the files. A mutation that stopped the
+     * screen handing the folders over stayed green until this existed.
+     */
+    it('marks the folder it is working on', async () => {
+        const api = fakeClient()
+        api.answerBrowse({ media: [], folders: [folder('f1')] })
+
+        const held = deferred<unknown>()
+        const holding = { ...api, trash: () => held.promise as Promise<never> }
+
+        const wrapper = mount(MhMediaLibrary, {
+            props: { client: holding },
+            attachTo: document.body,
+        })
+
+        await settle()
+
+        await folderTile(wrapper)?.trigger('contextmenu')
+        await settle()
+
+        await wrapper
+            .findAll('[role="menuitem"]')
+            .filter((item) => item.text() === 'Move to trash')[0]
+            ?.trigger('click')
+        await settle()
+
+        /* The question first — trashing a folder always asks. */
+        await agree(wrapper)
+        await settle()
+
+        expect(wrapper.find('nav[aria-label="Folders"] button[aria-busy="true"]').exists()).toBe(
+            true,
+        )
+
+        held.resolve({ count: 1 })
+        await settle()
+
+        expect(wrapper.find('nav[aria-label="Folders"] button[aria-busy="true"]').exists()).toBe(
+            false,
+        )
     })
 
     /**

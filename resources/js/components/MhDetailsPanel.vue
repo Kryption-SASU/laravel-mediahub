@@ -5,6 +5,7 @@ import { intlLocale, useMediaLocale, useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useMediaActions } from '../vue/useMediaActions'
+import { copyText } from './clipboard'
 import MhErrorState from './MhErrorState.vue'
 import { CHECK_GLYPH, COPY_GLYPH, GLYPH_BOX } from './glyphs'
 import MhThumbnail from './MhThumbnail.vue'
@@ -218,11 +219,12 @@ onBeforeUnmount(() => {
 /**
  * COPYING THE ADDRESS — AND THE FIELD IS SELECTED WHATEVER HAPPENS.
  *
- * ⚠️ `navigator.clipboard` DOES NOT EXIST OUTSIDE A SECURE CONTEXT, which is to say on every
- * `http://` development host there is. A button relying on it alone does nothing there, silently,
- * and the first report is "the copy button is broken" from the one environment everybody works
- * in. Selecting the text first leaves a keyboard route that always works; the API and the legacy
- * command are then tried in turn, and "Copied" is only ever shown when one of them said yes.
+ * ⚠️ THE FIELD IS HANDED OVER RATHER THAN LEFT TO BE BORROWED. The helper builds a stand-in when
+ * it is given nothing, which works but leaves the address on screen unselected: somebody whose
+ * browser refused both programmatic routes has no keyboard route left, and that is the case the
+ * whole fallback exists for.
+ *
+ * ⚠️ AND "COPIED" IS ONLY EVER SHOWN WHEN ONE OF THEM SAID YES.
  */
 async function copy(): Promise<void> {
     const url = props.media?.url
@@ -231,23 +233,7 @@ async function copy(): Promise<void> {
         return
     }
 
-    link.value?.select()
-
-    let done = false
-
-    try {
-        await navigator.clipboard?.writeText(url)
-        done = navigator.clipboard !== undefined
-    } catch {
-        /* Refused by permission or by the document not being focused. The command below is the
-         * remaining route, and the selection is the one after that. */
-    }
-
-    if (!done && typeof document.execCommand === 'function') {
-        done = document.execCommand('copy')
-    }
-
-    copied.value = done
+    copied.value = await copyText(url, link.value)
 
     if (clearing !== null) {
         clearTimeout(clearing)
