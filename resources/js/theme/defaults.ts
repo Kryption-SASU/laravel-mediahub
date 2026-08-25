@@ -668,9 +668,23 @@ export const defaultTheme: MhTheme = {
             layout: 'w-full min-w-0 rounded-md px-2 py-1 text-xs',
             class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)]',
         },
+        /*
+         * ⚠️ A DRAWING RATHER THAN A WORD, and the word moves to the label. "Copy" beside a field
+         * holding a URL is three characters wider than the field can spare on a narrow panel, and
+         * it says in text what an icon says at a glance. What it must never lose is the label:
+         * an icon button with nothing to announce is a button a screen reader calls "button".
+         */
         copy: {
-            layout: 'inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-medium',
+            layout: 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
             class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
+        },
+        copyIcon: {
+            layout: 'h-4 w-4',
+            class: '',
+        },
+        copied: {
+            layout: 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
         },
         use: {
             layout: 'w-full rounded-md px-3 py-2 text-sm font-medium',
@@ -684,9 +698,14 @@ export const defaultTheme: MhTheme = {
             layout: 'flex flex-col',
             class: '',
         },
+        /*
+         * ⚠️ A TERM IS CONTENT, NOT DECORATION. Set in the muted tone it was the palest thing on
+         * a panel of pale things — uppercase and small on top of that — and the words naming each
+         * fact were harder to read than the facts. Reported from a real screen on 25/08/2026.
+         */
         term: {
-            layout: 'text-xs uppercase',
-            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+            layout: 'text-xs font-semibold uppercase',
+            class: 'text-[var(--mh-color-foreground,#0f172a)]',
         },
         value: {
             layout: 'truncate',
@@ -697,8 +716,8 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         label: {
-            layout: 'text-xs font-medium',
-            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+            layout: 'text-xs font-semibold',
+            class: 'text-[var(--mh-color-foreground,#0f172a)]',
         },
         input: {
             layout: 'rounded-md px-2 py-1 text-sm',
