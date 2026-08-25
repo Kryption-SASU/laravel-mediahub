@@ -7,7 +7,7 @@ import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { resolveMediaHub } from '../vue/context'
 import MhErrorState from './MhErrorState.vue'
-import { CLOSE_GLYPH, GLYPH_BOX } from './glyphs'
+import { ALERT_GLYPH, CHECK_GLYPH, CLOSE_GLYPH, GLYPH_BOX } from './glyphs'
 import { useNativeDialog } from './useNativeDialog'
 
 /**
@@ -63,6 +63,31 @@ const ordered = computed(() => {
 })
 
 const wrong = computed(() => ordered.value.filter((one) => one.level !== 'ok').length)
+
+/**
+ * THE MARK EACH LEVEL WEARS.
+ *
+ * ⚠️ A DISC AND A DRAWING, READ BEFORE THE WORD BESIDE IT. A page of findings is scanned before
+ * it is read: somebody wants to know whether there is anything to do here, and a column of
+ * identical grey labels makes them read all of it to find out.
+ *
+ * ⚠️ AND THE WORD STAYS. Colour alone is unreadable to a tenth of the people looking at it and to
+ * everybody who prints the page, and a tick and a cross at sixteen pixels are not as different as
+ * they look when one is red and the other green to nobody.
+ *
+ * ⚠️ THE SLOT IS NAMED HERE RATHER THAN BUILT FROM THE LEVEL. `cls('dot' + level)` would put a
+ * string the theme has never heard of one typo away, and the failure would be an unstyled disc
+ * rather than an error.
+ */
+const MARKS: Record<string, { slot: string; glyph: readonly string[] }> = {
+    ok: { slot: 'dotOk', glyph: CHECK_GLYPH },
+    warning: { slot: 'dotWarning', glyph: ALERT_GLYPH },
+    error: { slot: 'dotError', glyph: CLOSE_GLYPH },
+}
+
+function mark(level: string): { slot: string; glyph: readonly string[] } {
+    return MARKS[level] ?? MARKS['ok']!
+}
 
 async function run(): Promise<void> {
     loading.value = true
@@ -134,7 +159,30 @@ defineExpose({ run })
 
                 <ul :class="cls('list')">
                     <li v-for="check in ordered" :key="check.id" :class="cls('entry')">
-                        <span :class="cls(check.level)">{{ t('health.level.' + check.level) }}</span>
+                        <p :class="cls('badge')">
+                            <span :class="cls(mark(check.level).slot)">
+                                <svg
+                                    :class="cls('markIcon')"
+                                    :viewBox="GLYPH_BOX"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="3"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        v-for="(drawing, step) in mark(check.level).glyph"
+                                        :key="step"
+                                        :d="drawing"
+                                    />
+                                </svg>
+                            </span>
+
+                            <span :class="cls(check.level)">
+                                {{ t('health.level.' + check.level) }}
+                            </span>
+                        </p>
 
                         <p :class="cls('checkTitle')">{{ check.title }}</p>
                         <p :class="cls('detail')">{{ check.detail }}</p>

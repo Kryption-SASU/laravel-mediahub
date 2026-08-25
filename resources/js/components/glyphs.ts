@@ -51,6 +51,11 @@ export const TRASH_GLYPH: readonly string[] = [
 
 export const CHECK_GLYPH: readonly string[] = ['M5 12.5l4.5 4.5L19 7.5']
 
+/** ⚠️ THE DOT IS A ZERO-LENGTH STROKE, like the menu's three: a round line cap turns `M12 17h.01`
+ * into a disc, so it belongs to the same family as every other drawing here rather than being a
+ * filled circle that ignores the stroke width and the colour. */
+export const ALERT_GLYPH: readonly string[] = ['M12 7v6', 'M12 17h.01']
+
 /** ⚠️ AN ARROW THAT TURNS BACK, WHICH IS WHAT UNDO LOOKS LIKE EVERYWHERE. An arrow pointing out
  * of a bin would be the literal act, and unreadable at sixteen pixels. */
 export const RESTORE_GLYPH: readonly string[] = [

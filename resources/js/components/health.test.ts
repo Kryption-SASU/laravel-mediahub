@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { HealthReport } from '../client'
 import { MediaHubError } from '../client'
 import { fakeClient, folder, media } from '../vue/fake.test-utils'
+import { ALERT_GLYPH, CHECK_GLYPH, CLOSE_GLYPH } from './glyphs'
 import MhHealthReport from './MhHealthReport.vue'
 import MhMediaLibrary from './MhMediaLibrary.vue'
 
@@ -128,6 +129,86 @@ describe('the health report', () => {
 
         expect(wrapper.text()).toContain('Failing')
         expect(wrapper.text()).toContain('Worth a look')
+    })
+
+    /**
+     * ⚠️ EACH LEVEL WEARS ITS OWN MARK, and the drawing is what is checked rather than the
+     * colour. A page of findings is scanned before it is read — somebody wants to know whether
+     * there is anything to do here — and three identical grey labels make them read all of it to
+     * find out.
+     *
+     * ⚠️ THE GLYPHS ARE COMPARED BY THEIR PATHS, so a table that pointed two levels at the same
+     * drawing is caught. Reading the class instead would compare a skin a host is invited to
+     * replace, and would go on passing with every disc drawing the same thing.
+     */
+    it('gives each level its own mark', async () => {
+        const { wrapper, api } = report()
+
+        api.answerHealth(failing)
+
+        await (wrapper.vm as unknown as { run(): Promise<void> }).run()
+        await settle()
+
+        const drawn = wrapper
+            .findAll('li')
+            .map((one) => one.findAll('path').map((path) => path.attributes('d')))
+
+        /* The order is failing, then worth a look, then fine. */
+        expect(drawn[0]).toEqual([...CLOSE_GLYPH])
+        expect(drawn[1]).toEqual([...ALERT_GLYPH])
+        expect(drawn[2]).toEqual([...CHECK_GLYPH])
+    })
+
+    /**
+     * ⚠️ AND THE WORD STAYS BESIDE IT. Colour alone is unreadable to a tenth of the people
+     * looking at it and to everybody who prints the page — and a tick and a cross at sixteen
+     * pixels are not as different as they look once neither colour arrives.
+     */
+    it('keeps the word beside the mark', async () => {
+        const { wrapper, api } = report()
+
+        api.answerHealth(failing)
+
+        await (wrapper.vm as unknown as { run(): Promise<void> }).run()
+        await settle()
+
+        const first = wrapper.findAll('li')[0]
+
+        expect(first?.find('svg').exists()).toBe(true)
+        expect(first?.text()).toContain('Failing')
+    })
+
+    /**
+     * ⚠️ A LEVEL THIS SCREEN HAS NEVER HEARD OF STILL RENDERS. The findings come from the server,
+     * and a server can be newer than the page looking at it — a fourth level added there would,
+     * without a fallback, be a lookup returning nothing and a property read on it that throws,
+     * which takes the WHOLE report down rather than the one line it did not understand.
+     *
+     * ⚠️ AND THE TYPE DOES NOT PROTECT AGAINST THIS. It describes what the server is expected to
+     * send, which is a statement about today; the value arrives over the network and is checked
+     * by nobody.
+     */
+    it('still draws a finding whose level it does not know', async () => {
+        const { wrapper, api } = report()
+
+        api.answerHealth({
+            ok: false,
+            checks: [
+                {
+                    id: 'from.the.future',
+                    level: 'catastrophe' as 'error',
+                    title: 'Something newer than this screen',
+                    detail: 'Sent by a server that knows more.',
+                    recommendation: null,
+                },
+            ],
+        })
+
+        await (wrapper.vm as unknown as { run(): Promise<void> }).run()
+        await settle()
+
+        expect(wrapper.text()).toContain('Something newer than this screen')
+        expect(wrapper.findAll('li')).toHaveLength(1)
     })
 
     /** ⚠️ THE HEADLINE IS A COUNT. "Two things to look at" is what somebody acts on; a tick they
