@@ -568,6 +568,140 @@ class TableBackendApiTest extends TestCase
         $this->assertNull($body['media'][0]['height']);
     }
 
+    // ── Putting a branch away, and taking it back ────────────────────────────
+
+    /**
+     * ⚠️ REPORTED FROM A REAL SCREEN ON 25/08/2026: a folder ticked in the trash was not restored,
+     * nor anything inside it, while files at the root came back fine. This walks the whole round
+     * trip over HTTP — trash the branch, look at the trash, restore the branch — because that is
+     * the path the report describes and the one nothing was exercising.
+     */
+    public function test_a_whole_branch_goes_to_the_trash_and_comes_back(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $root = $this->folder('testfolder');
+        $nested = $this->folder('imbrication', $root);
+
+        $first = $this->media(['folder_id' => $nested->getKey()]);
+        $second = $this->media(['folder_id' => $nested->getKey()]);
+
+        $this->postJson('/media/trash', ['folders' => [$root->getRouteKey()]])->assertOk();
+
+        $this->assertNotNull(MediaFolder::onlyTrashed()->find($nested->getKey()));
+        $this->assertSame(2, Media::onlyTrashed()->count());
+
+        /* ⚠️ THE TRASH LISTS THE BRANCH'S ROOT, which is what somebody ticks. */
+        $listed = $this->getJson('/media?trashed=1')->assertOk()->json('data');
+
+        /* ⚠️ AS A STRING, because that is what the contract says a key is — see above. */
+        $this->assertSame([(string) $root->getRouteKey()], array_column($listed['folders'], 'id'));
+
+        $this->postJson('/media/trash/restore', ['folders' => [$root->getRouteKey()]])->assertOk();
+
+        $this->assertNull(MediaFolder::onlyTrashed()->first());
+        $this->assertNull(Media::onlyTrashed()->first());
+        $this->assertNotNull(Media::query()->find($first->getKey()));
+        $this->assertNotNull(Media::query()->find($second->getKey()));
+    }
+
+    /**
+     * ⚠️ AND THE BRANCH CAN BE WALKED INTO WHILE IT IS IN THERE. Resolved with the plain query,
+     * a trashed folder answered "no such folder": the branch could be seen at its root and never
+     * opened, so its nesting — and the files inside it — were unreachable. Somebody deciding what
+     * to put back could not look at what they were putting back.
+     */
+    public function test_a_trashed_branch_can_be_walked_into(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $root = $this->folder('testfolder');
+        $nested = $this->folder('imbrication', $root);
+        $this->media(['folder_id' => $nested->getKey()]);
+
+        $this->postJson('/media/trash', ['folders' => [$root->getRouteKey()]])->assertOk();
+
+        $inside = $this->getJson('/media?trashed=1&folder='.$root->getRouteKey())
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([(string) $nested->getRouteKey()], array_column($inside['folders'], 'id'));
+
+        $deeper = $this->getJson('/media?trashed=1&folder='.$nested->getRouteKey())
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(1, $deeper['media']);
+    }
+
+    /**
+     * ⚠️ A THUMBNAIL SURVIVES THE TRASH, AND HAS TO BE SHOWABLE THERE. Trashing keeps every row
+     * and every byte — that is what makes restoring possible — but a conversion asked for its
+     * media got `null` the moment that media was thrown away, because the relation carried the
+     * soft-delete scope. Building the derivative's URL then raised `conversion_without_media`,
+     * so opening a folder in the trash answered with an error instead of a listing.
+     *
+     * ⚠️ AND SHOWING IT IS THE POINT: somebody deciding what to put back is looking at pictures.
+     */
+    public function test_a_trashed_picture_still_shows_its_thumbnail(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('testfolder');
+        $media = $this->media(['folder_id' => $folder->getKey(), 'mime_type' => 'image/png']);
+
+        DB::table('mediahub_conversions')->insert([
+            'media_id' => $media->getKey(),
+            'name' => 'thumb',
+            'disk' => 'objects',
+            'path' => 'thumb.png',
+            'state' => 'ready',
+        ]);
+
+        $this->postJson('/media/trash', ['folders' => [$folder->getRouteKey()]])->assertOk();
+
+        $body = $this->getJson('/media?trashed=1&folder='.$folder->getRouteKey())
+            ->assertOk()
+            ->json('data');
+
+        $this->assertNotNull($body['media'][0]['thumbnail_url']);
+    }
+
+    /**
+     * ⚠️ THE TOP OF THE TRASH IS NOT THE ROOT OF THE LIBRARY. A folder thrown away on its own,
+     * from inside a folder that is still there, has nowhere else to show: listed only "at the
+     * root", it would be in the trash and invisible.
+     */
+    public function test_a_folder_thrown_away_from_inside_a_living_one_is_still_listed(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $living = $this->folder('Clients');
+        $thrown = $this->folder('Acme', $living);
+
+        $this->postJson('/media/trash', ['folders' => [$thrown->getRouteKey()]])->assertOk();
+
+        $listed = $this->getJson('/media?trashed=1')->assertOk()->json('data');
+
+        $this->assertSame([(string) $thrown->getRouteKey()], array_column($listed['folders'], 'id'));
+    }
+
+    /** ⚠️ AND THE LIBRARY GOES ON SHOWING ONLY WHAT IS ALIVE, which is the other half of the same
+     * mistake: the trash used to list the living folders. */
+    public function test_the_library_lists_none_of_what_was_thrown_away(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $kept = $this->folder('Clients');
+        $thrown = $this->folder('Invoices');
+
+        $this->postJson('/media/trash', ['folders' => [$thrown->getRouteKey()]])->assertOk();
+
+        $listed = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertSame([(string) $kept->getRouteKey()], array_column($listed['folders'], 'id'));
+    }
+
     // ── Who owns what the API creates ────────────────────────────────────────
 
     /**

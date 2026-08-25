@@ -39,9 +39,48 @@ final class BrowseController
 
         $query = BrowseQuery::fromInput($request->all(), $folder, rootOnly: true);
 
+        /*
+         * ⚠️ THE FOLDERS HALF USED TO IGNORE THE TRASH ENTIRELY. Only the media were asked for
+         * with `onlyTrashed()`; the folders came from the plain query, which the soft-delete
+         * scope filters — so the trash showed the LIVE folders and hid its own. Reported from a
+         * real screen on 25/08/2026: a branch thrown away could not be found, let alone put back.
+         *
+         * ⚠️ AND AT THE TOP OF THE TRASH, WHAT IS LISTED IS WHAT WAS THROWN AWAY — not what sits
+         * at the root of the library. A folder whose parent is in the trash too is reached by
+         * walking into that parent, exactly as in the library; one whose parent is still alive
+         * has nowhere else to appear, so it belongs at the top.
+         *
+         * ⚠️ THE RULE IS EXPRESSED AGAINST A LIST OF KEYS RATHER THAN WITH `whereHas('parent')`,
+         * and that is not a preference. On a self-referencing model the relation subquery is
+         * aliased, but the soft-delete scope qualifies its column against the OUTER table:
+         *
+         *     exists (select * from media_folders as laravel_reserved_0
+         *             where laravel_reserved_0.id = media_folders.parent_id
+         *               and media_folders.deleted_at is null)
+         *
+         * Every row this filter looks at is trashed, so that last condition is false for all of
+         * them and the whole `exists` never matches. It returns an empty trash, with no error.
+         *
+         * ⚠️ AND ONE CONDITION COVERS BOTH CASES. The root is written as a value no key ever
+         * takes, so a folder at the root is never "inside a trashed folder" either.
+         */
+        $inTheTrash = $query->trashed
+            ? MediaFolder::onlyTrashed()->pluck((new MediaFolder())->getKeyName())->all()
+            : [];
+
         $subfolders = MediaFolder::query()
             ->with('parent')
-            ->atParent('parent_id', $folder?->getKey())
+            ->when(
+                $query->trashed,
+                fn ($builder) => $builder
+                    ->onlyTrashed()
+                    ->when(
+                        $folder === null,
+                        fn ($roots) => $roots->whereNotIn(MediaFolder::column('parent_id'), $inTheTrash),
+                        fn ($inside) => $inside->atParent('parent_id', $folder?->getKey()),
+                    ),
+                fn ($builder) => $builder->atParent('parent_id', $folder?->getKey()),
+            )
             ->orderBy(MediaFolder::column('name'))
             ->get();
 
@@ -78,7 +117,16 @@ final class BrowseController
             return null;
         }
 
+        /*
+         * ⚠️ A TRASHED FOLDER CAN BE OPENED — from the trash, and only from there. Resolved with
+         * the plain query it answered "no such folder", so a branch in the trash could be seen at
+         * its root and never walked into: its nesting, and everything inside, was unreachable.
+         */
         $folder = MediaFolder::query()
+            ->when(
+                $request->boolean('trashed'),
+                static fn ($builder) => $builder->withTrashed(),
+            )
             ->with('parent')
             ->where((new MediaFolder())->getRouteKeyName(), (string) $key)
             ->first();

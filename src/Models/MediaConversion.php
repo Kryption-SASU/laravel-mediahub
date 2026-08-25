@@ -35,9 +35,20 @@ class MediaConversion extends Model
         return HostSchema::table('conversions');
     }
 
+    /**
+     * ⚠️ INCLUDING A MEDIA IN THE TRASH, because parentage is not visibility. Trashing keeps every
+     * row and every byte — that is what makes restoring possible — so a derivative still exists
+     * and can still be shown. Without this, asking a conversion for its media returned `null` the
+     * moment that media was thrown away, and building the derivative's URL raised
+     * `conversion_without_media`: opening a folder in the trash answered with an error instead of
+     * a listing. Measured on a real host on 25/08/2026.
+     *
+     * ⚠️ AND SHOWING IT IS THE POINT. Somebody deciding what to put back is looking at pictures;
+     * a trash of grey rectangles is one nobody can sort through.
+     */
     public function media(): BelongsTo
     {
-        return $this->belongsTo(Media::class, 'media_id');
+        return $this->belongsTo(Media::class, 'media_id')->withTrashed();
     }
 
     public function isReady(): bool
