@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Kryption\MediaHub\Exceptions\StorageMisconfigured;
 use Kryption\MediaHub\Actions\CreateFolder;
+use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Contracts\MediaScope;
 use Kryption\MediaHub\Models\Media;
@@ -513,6 +514,42 @@ class TableBackendApiTest extends TestCase
 
         $this->assertNull($body['media'][0]['width']);
         $this->assertNull($body['media'][0]['height']);
+    }
+
+    /**
+     * ⚠️ A SCHEMA WITH NEITHER PLACE KEEPS NOTHING, AND THE UPLOAD STILL WORKS. Not every adopted
+     * schema has a free-form column: a host may map `custom_properties` to `null` the same way
+     * this preset maps `width` to `null`, because the table simply has no such column. Writing
+     * there is ignored in silence — deliberately, so a poorer schema cannot make a valid upload
+     * fail — so what has to be checked is that the file still lands, and that the answer says no
+     * size rather than inventing one.
+     */
+    public function test_a_schema_with_nowhere_at_all_keeps_no_size_and_still_accepts_the_file(): void
+    {
+        /* ⚠️ THE WHOLE FILE MAP, BECAUSE THAT IS WHAT NAMING IT MEANS. The deep merge goes one
+         * level down, so `map.files` replaces the preset's rather than merging into it — which
+         * is exactly how a host loses thirty-nine columns while correcting one. */
+        $preset = require __DIR__.'/../../config/presets/legacy.php';
+
+        config()->set('mediahub.backend.map.files', array_merge(
+            $preset['map']['files'],
+            ['custom_properties' => null],
+        ));
+
+        HostSchema::flush();
+
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $body = $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful()->json('data');
+
+        $this->assertFalse(Media::hasColumn('custom_properties'));
+        $this->assertCount(1, $body);
+        $this->assertNull($body[0]['width']);
     }
 
     /**

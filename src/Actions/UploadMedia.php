@@ -241,9 +241,16 @@ final class UploadMedia
      * and until now the value read off the file was computed, assigned, and quietly dropped. The
      * screen then showed nothing where a size belongs, on every installation of that kind.
      *
-     * ⚠️ IT GOES IN THE FREE-FORM PROPERTIES, WHICH EVERY SCHEMA HAS. That blob is the one place
-     * a host is expected to let a package keep what it learned, and the legacy mirror already
-     * merges into it rather than replacing it, so nothing overwrites this later.
+     * ⚠️ IT GOES IN THE FREE-FORM PROPERTIES — WHERE THE SCHEMA HAS THEM. That is the one place
+     * a host is expected to let a package keep what it learned about a file, and it is merged
+     * into rather than replaced, so a mirror writing its own key there afterwards keeps both.
+     *
+     * ⚠️ AND A SCHEMA THAT HAS NEITHER KEEPS NOTHING — handled one layer down, not here. Writing
+     * to an absent column is ignored by the model, in silence and deliberately, so that a poorer
+     * schema cannot make a valid upload fail. A second check in this method was written and taken
+     * out again: no mutation could turn it red, because the model already held the rule. What
+     * cannot be kept is not kept, the screen then shows no size, and that is the truth rather
+     * than a defect — there is a bench for it either way.
      *
      * ⚠️ AND IT IS THE ORIGINAL THAT IS MEASURED, taken from the uploaded file before a single
      * derivative exists. A thumbnail's dimensions are a fact about the thumbnail.
