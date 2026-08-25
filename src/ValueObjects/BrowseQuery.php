@@ -33,7 +33,13 @@ final class BrowseQuery
         'size' => 'size',
     ];
 
-    public const DEFAULT_PER_PAGE = 24;
+    /**
+     * ⚠️ A MULTIPLE OF TWELVE, SO EVERY ROW IS FULL. The grid runs to two, three, four and six
+     * columns depending on the width; forty-eight divides by all of them, so no page ends on a
+     * half-empty line at any size. Twenty-four did too — this is simply twice the context on a
+     * screen that has the room, and one round trip instead of two for the same files.
+     */
+    public const DEFAULT_PER_PAGE = 48;
 
     public const MAX_PER_PAGE = 100;
 

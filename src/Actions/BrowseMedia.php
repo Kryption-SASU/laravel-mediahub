@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kryption\MediaHub\Actions;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Kryption\MediaHub\Backends\TypeFilter;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaFolder;
@@ -24,6 +25,20 @@ use Kryption\MediaHub\ValueObjects\BrowseQuery;
 final class BrowseMedia
 {
     public function __invoke(BrowseQuery $query): LengthAwarePaginator
+    {
+        return $this->query($query)->paginate(perPage: $query->perPage, page: $query->page);
+    }
+
+    /**
+     * THE SAME LISTING, WITHOUT DECIDING WHERE IT IS CUT.
+     *
+     * ⚠️ A LEVEL IS FOLDERS AND FILES, AND A PAGE OF ONE IS A PAGE OF BOTH. Paginating the media
+     * alone put every folder on top of every page: a level with twelve folders showed sixty tiles
+     * where it promised forty-eight, and "page 2 of 3" counted only half of what was on screen.
+     * Whoever assembles the two has to be the one that cuts them, so this hands back the query
+     * rather than a slice of it.
+     */
+    public function query(BrowseQuery $query): Builder
     {
         $builder = Media::query()->with(Media::eagerLoadable());
 
@@ -57,7 +72,6 @@ final class BrowseMedia
              * a date to the second — leaves the order of ties to the engine: the same item then
              * appears on two pages, and another on none.
              */
-            ->orderBy((new Media())->getKeyName(), 'desc')
-            ->paginate(perPage: $query->perPage, page: $query->page);
+            ->orderBy((new Media())->getKeyName(), 'desc');
     }
 }

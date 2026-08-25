@@ -568,6 +568,150 @@ class TableBackendApiTest extends TestCase
         $this->assertNull($body['media'][0]['height']);
     }
 
+    // ── A page of a level is a page of both halves ───────────────────────────
+
+    /**
+     * ⚠️ A FOLDER IS ONE TILE, SO IT HAS TO BE ONE ITEM. Paginating the media alone put every
+     * folder on top of every page: a level with twelve folders showed sixty tiles where it
+     * promised forty-eight, the same twelve came back on page two, and "page 2 of 3" counted only
+     * half of what was on screen.
+     */
+    public function test_a_page_holds_folders_and_files_together(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        foreach (range(1, 3) as $number) {
+            $this->folder('folder '.$number);
+        }
+
+        foreach (range(1, 4) as $ignored) {
+            $this->media();
+        }
+
+        $body = $this->getJson('/media?per_page=5')->assertOk()->json();
+
+        $this->assertCount(3, $body['data']['folders']);
+        $this->assertCount(2, $body['data']['media']);
+        $this->assertSame(7, $body['meta']['total']);
+        $this->assertSame(2, $body['meta']['last_page']);
+    }
+
+    /** ⚠️ AND THE SECOND PAGE PICKS UP WHERE THE FIRST STOPPED — no row twice, none skipped. */
+    public function test_the_next_page_carries_on_from_where_the_first_ended(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        foreach (range(1, 3) as $number) {
+            $this->folder('folder '.$number);
+        }
+
+        foreach (range(1, 4) as $ignored) {
+            $this->media();
+        }
+
+        $first = $this->getJson('/media?per_page=5')->assertOk()->json('data');
+        $second = $this->getJson('/media?per_page=5&page=2')->assertOk()->json('data');
+
+        $this->assertCount(0, $second['folders']);
+        $this->assertCount(2, $second['media']);
+
+        $seen = array_merge(
+            array_column($first['media'], 'id'),
+            array_column($second['media'], 'id'),
+        );
+
+        $this->assertCount(4, array_unique($seen));
+    }
+
+    /**
+     * ⚠️ A PAGE PAST THE FOLDERS HOLDS ONLY FILES, and it starts at the right one. Off by the
+     * folder count, the media would repeat what page one already showed.
+     */
+    public function test_a_page_beyond_the_folders_starts_at_the_right_file(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $this->folder('the only folder');
+
+        foreach (range(1, 6) as $ignored) {
+            $this->media();
+        }
+
+        $first = $this->getJson('/media?per_page=3')->assertOk()->json('data');
+        $third = $this->getJson('/media?per_page=3&page=3')->assertOk()->json('data');
+
+        $this->assertCount(1, $first['folders']);
+        $this->assertCount(2, $first['media']);
+        $this->assertCount(0, $third['folders']);
+
+        $this->assertSame(
+            [],
+            array_intersect(array_column($first['media'], 'id'), array_column($third['media'], 'id')),
+        );
+    }
+
+    /**
+     * ⚠️ FOLDERS CAN OVERFLOW A PAGE ON THEIR OWN, and that is the case the rest of these tests
+     * never reached: with fewer folders than fit, taking "all of them" and taking "as many as
+     * there is room for" give the same answer, and so do skipping none and skipping the ones
+     * already shown. Caught by mutation on 25/08/2026 — two bounds nothing could tell apart.
+     */
+    public function test_folders_spill_onto_the_following_pages(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        foreach (range(1, 5) as $number) {
+            $this->folder('folder '.$number);
+        }
+
+        foreach (range(1, 2) as $ignored) {
+            $this->media();
+        }
+
+        $first = $this->getJson('/media?per_page=3')->assertOk()->json();
+        $second = $this->getJson('/media?per_page=3&page=2')->assertOk()->json('data');
+        $third = $this->getJson('/media?per_page=3&page=3')->assertOk()->json('data');
+
+        $this->assertCount(3, $first['data']['folders']);
+        $this->assertCount(0, $first['data']['media']);
+
+        /* ⚠️ THE SECOND PAGE STARTS AT THE FOURTH FOLDER, not at the first all over again. */
+        $this->assertCount(2, $second['folders']);
+        $this->assertCount(1, $second['media']);
+
+        $this->assertCount(0, $third['folders']);
+        $this->assertCount(1, $third['media']);
+
+        $names = array_merge(
+            array_column($first['data']['folders'], 'id'),
+            array_column($second['folders'], 'id'),
+        );
+
+        $this->assertCount(5, array_unique($names));
+        $this->assertSame(3, $first['meta']['last_page']);
+    }
+
+    /** ⚠️ AT LEAST ONE PAGE, EVEN EMPTY — "page 1 of 0" is a sentence nobody can act on. */
+    public function test_an_empty_level_still_has_one_page(): void
+    {
+        $body = $this->getJson('/media')->assertOk()->json('meta');
+
+        $this->assertSame(0, $body['total']);
+        $this->assertSame(1, $body['last_page']);
+    }
+
+    /** ⚠️ FORTY-EIGHT UNLESS ASKED OTHERWISE, and the cap still refuses a page of a hundred
+     * thousand — that was a one-parameter attack before it was a setting. */
+    public function test_the_page_size_is_forty_eight_and_still_capped(): void
+    {
+        $this->assertSame(48, $this->getJson('/media')->assertOk()->json('meta.per_page'));
+
+        $this->assertSame(
+            100,
+            $this->getJson('/media?per_page=100000')->assertOk()->json('meta.per_page'),
+        );
+    }
+
     // ── Putting a branch away, and taking it back ────────────────────────────
 
     /**
