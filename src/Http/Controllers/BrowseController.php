@@ -72,7 +72,7 @@ final class BrowseController
             ? MediaFolder::onlyTrashed()->pluck((new MediaFolder())->getKeyName())->all()
             : [];
 
-        $subfolders = MediaFolder::query()
+        $folders = MediaFolder::query()
             ->with('parent')
             ->when(
                 $query->trashed,
@@ -89,10 +89,44 @@ final class BrowseController
                     ),
                 fn ($builder) => $builder->atParent('parent_id', $folder?->getKey()),
             )
-            ->orderBy(MediaFolder::column('name'))
+            ->orderBy(MediaFolder::column('name'));
+
+        /*
+         * A LEVEL IS FOLDERS AND FILES, AND A PAGE OF IT IS A PAGE OF BOTH.
+         *
+         * ⚠️ PAGINATING THE MEDIA ALONE PUT EVERY FOLDER ON TOP OF EVERY PAGE. A level with twelve
+         * folders showed sixty tiles where it promised forty-eight, the same twelve came back on
+         * page two, and "page 2 of 3" counted only half of what was on screen. A folder is one
+         * tile; it has to be one item.
+         *
+         * ⚠️ FOLDERS COME FIRST, ALWAYS, AND THE SORT DOES NOT REACH THEM. Interleaving them by
+         * size or by date would scatter the way into the tree through the files — and a folder has
+         * no size to compare against a file's. Every file manager settles this the same way, and
+         * it is what makes "the first page holds the folders" a rule somebody can rely on.
+         */
+        $foldersTotal = (clone $folders)->count();
+        $mediaQuery = $this->browse->query($query);
+        $mediaTotal = (clone $mediaQuery)->count();
+
+        $offset = ($query->page - 1) * $query->perPage;
+
+        /* ⚠️ NO UPPER BOUND ON WHAT IS TAKEN, BECAUSE THE SKIP ALREADY SETS IT. Past the last
+         * folder there is nothing left to hand back, so `min(perPage, remaining)` was an
+         * expression no mutation could tell from `perPage` — a line to maintain that said
+         * nothing. What must be computed is where to start. */
+        $folderSlice = $folders
+            ->skip(min($offset, $foldersTotal))
+            ->take($query->perPage)
             ->get();
 
-        $page = ($this->browse)($query);
+        /* ⚠️ WHAT THE FOLDERS DID NOT FILL, AND NOTHING MORE. Past the last folder the media pick
+         * up where the count left off, so no row is shown twice and none is skipped. */
+        $media = $mediaQuery
+            ->skip(max(0, $offset - $foldersTotal))
+            ->take($query->perPage - $folderSlice->count())
+            ->get();
+
+        $total = $foldersTotal + $mediaTotal;
 
         return new JsonResponse([
             'data' => [
@@ -100,14 +134,16 @@ final class BrowseController
                 'breadcrumbs' => $folder === null
                     ? []
                     : FolderResource::collection($this->tree->breadcrumbs($folder)),
-                'folders' => FolderResource::collection($subfolders),
-                'media' => MediaResource::collection($page->items()),
+                'folders' => FolderResource::collection($folderSlice),
+                'media' => MediaResource::collection($media),
             ],
             'meta' => [
-                'current_page' => $page->currentPage(),
-                'last_page' => $page->lastPage(),
-                'per_page' => $page->perPage(),
-                'total' => $page->total(),
+                'current_page' => $query->page,
+                /* ⚠️ AT LEAST ONE PAGE, EVEN EMPTY. "Page 1 of 0" is a sentence nobody can act on,
+                 * and a control built from it offers no page to go to. */
+                'last_page' => max(1, (int) ceil($total / $query->perPage)),
+                'per_page' => $query->perPage,
+                'total' => $total,
             ],
         ]);
     }
