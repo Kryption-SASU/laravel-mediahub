@@ -42,6 +42,13 @@ const props = withDefaults(
          * glanced at, and its confirmation names a count rather than the files.
          */
         choosing?: boolean
+        /**
+         * The keys something is being done to right now.
+         *
+         * ⚠️ A LIST RATHER THAN A FLAG, because a batch is the ordinary case. Trashing nine files
+         * marks the nine, so the wait is drawn where the work is rather than over the screen.
+         */
+        busy?: readonly string[]
         ui?: MhComponentOverride
     }>(),
     {
@@ -51,6 +58,7 @@ const props = withDefaults(
         error: null,
         columns: 1,
         choosing: true,
+        busy: () => [],
         ui: undefined,
     },
 )
@@ -208,6 +216,7 @@ const label = computed(() => t('grid.count', {}, props.media.length))
             :total="media.length"
             :focused="position === cursor"
             :picking="choosing"
+            :busy="busy.includes(item.id)"
             @click="toggle(item)"
             @dblclick="$emit('activate', item)"
             @menu="emit('menu', item, $event)"

@@ -51,12 +51,52 @@ export const TRASH_GLYPH: readonly string[] = [
 
 export const CHECK_GLYPH: readonly string[] = ['M5 12.5l4.5 4.5L19 7.5']
 
+/** ⚠️ AN ARROW THAT TURNS BACK, WHICH IS WHAT UNDO LOOKS LIKE EVERYWHERE. An arrow pointing out
+ * of a bin would be the literal act, and unreadable at sixteen pixels. */
+export const RESTORE_GLYPH: readonly string[] = [
+    'M4.5 12a7.5 7.5 0 1 0 2.2-5.3',
+    'M4 5.5V10h4.5',
+]
+
 export const COPY_GLYPH: readonly string[] = [
     'M9 9h10v10a1.5 1.5 0 0 1-1.5 1.5H9Z',
     'M15 9V4.5A1.5 1.5 0 0 0 13.5 3h-8A1.5 1.5 0 0 0 4 4.5v10A1.5 1.5 0 0 0 5.5 16H9',
 ]
 
 export const CLOSE_GLYPH: readonly string[] = ['M6 6l12 12', 'M18 6l-12 12']
+
+/** ⚠️ AN EYE, NOT A MAGNIFIER. A magnifier says "search" on every other screen on the machine,
+ * and this entry opens something rather than looking for it. */
+export const EYE_GLYPH: readonly string[] = [
+    'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12',
+    'M14.5 12a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0',
+]
+
+/** ⚠️ TWO LINKS OF A CHAIN, WHICH IS WHAT AN ADDRESS IS EVERYWHERE ELSE. The duplicate glyph is
+ * two sheets of paper, and the two entries sit next to each other on the menu — telling them
+ * apart at a glance is the whole reason either has a drawing. */
+export const LINK_GLYPH: readonly string[] = [
+    'M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.5 1.5',
+    'M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.5-1.5',
+]
+
+export const PENCIL_GLYPH: readonly string[] = [
+    'M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5Z',
+    'M13.5 7l3.5 3.5',
+]
+
+/** ⚠️ THE SAME TWO SHEETS AS `COPY_GLYPH`, AND ON PURPOSE. Copying an address and duplicating a
+ * file are not the same act, but "there are two of it now" is the same idea, and a second
+ * drawing for it would be a distinction nobody asked for. */
+export const DUPLICATE_GLYPH: readonly string[] = COPY_GLYPH
+
+/** ⚠️ THE ARROW POINTS DOWN, WHERE THE UPLOAD'S POINTS UP, and both stand over the same tray.
+ * The pair reads as one idea in two directions rather than as two unrelated drawings. */
+export const DOWNLOAD_GLYPH: readonly string[] = [
+    'M12 4v12',
+    'M8 12l4 4 4-4',
+    'M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15',
+]
 
 export const UPLOAD_GLYPH: readonly string[] = [
     'M12 16V4',

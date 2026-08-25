@@ -39,6 +39,13 @@ const props = withDefaults(
          * asking.
          */
         picking?: boolean
+        /**
+         * ⚠️ WHETHER SOMETHING IS BEING DONE TO THIS FILE RIGHT NOW. Drawn on the tile rather than
+         * over the screen: a veil in the middle of the window blocks a library somebody could
+         * still be using, and says nothing about which file it is waiting on. Here, the answer to
+         * "is it working?" and the answer to "on what?" are the same mark.
+         */
+        busy?: boolean
         ui?: MhComponentOverride
     }>(),
     {
@@ -47,6 +54,7 @@ const props = withDefaults(
         total: undefined,
         focused: false,
         picking: false,
+        busy: false,
         ui: undefined,
     },
 )
@@ -74,8 +82,33 @@ const rootClasses = computed(() =>
         :aria-setsize="total"
         :aria-posinset="index"
         :tabindex="focused ? 0 : -1"
-        @contextmenu.prevent.stop="picking || emit('menu', $event)"
+        :aria-busy="busy || undefined"
+        @contextmenu.prevent.stop="picking || busy || emit('menu', $event)"
     >
+        <!--
+            ⚠️ IT COVERS THE TILE, WHICH IS ALSO HOW IT MAKES IT INERT. Everything underneath keeps
+            working while one file is being copied — that is the point of not veiling the screen —
+            but the file being copied must not be asked to do a second thing at the same time, and
+            an overlay that swallows the pointer says so without a `disabled` on four controls.
+
+            ⚠️ AND THE STATE IS ANNOUNCED, NOT ONLY DRAWN. `aria-busy` above is what a screen
+            reader has to go on; a spinning ring is nothing at all to it.
+        -->
+        <span v-if="busy" :class="cls('busy')">
+            <svg
+                :class="cls('spinner')"
+                :viewBox="GLYPH_BOX"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+            >
+                <circle cx="12" cy="12" r="9" stroke-opacity="0.3" />
+                <path d="M21 12a9 9 0 0 0-9-9" />
+            </svg>
+        </span>
+
         <!-- ⚠️ SHOWN BECAUSE IT IS TICKED, not because a pointer is over it. This is the one mark
              on the tile that has to survive being looked at from across the room. -->
         <span v-if="selected" :class="cls('tick')" :aria-hidden="true">
@@ -104,7 +137,7 @@ const rootClasses = computed(() =>
             reached the card with the arrows and wonders what can be done with it.
         -->
         <button
-            v-if="!picking"
+            v-if="!picking && !busy"
             type="button"
             tabindex="-1"
             :class="cls('menu')"

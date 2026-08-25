@@ -26,6 +26,11 @@ export interface MhLocale {
 }
 
 const en: MhMessages = {
+    'actions.preview': 'Preview',
+    'actions.link': 'Copy link',
+    'actions.rename': 'Rename',
+    'actions.duplicate': 'Duplicate',
+    'actions.download': 'Download',
     'actions.trash': 'Move to trash',
     'actions.trash.confirmTitle': 'Move to the trash?',
     'actions.trash.confirmMessage': 'They can be restored from the trash afterwards.',
@@ -34,6 +39,13 @@ const en: MhMessages = {
     'actions.trash.confirmInside':
         '{count} file inside will go with them, and can be restored from the trash afterwards.|{count} files inside will go with them, and can be restored from the trash afterwards.',
     'actions.restore': 'Restore',
+    'rename.title': 'Rename',
+    'rename.field': 'Name',
+    'rename.save': 'Rename',
+    'rename.cancel': 'Cancel',
+    'viewer.label': 'Preview',
+    'viewer.close': 'Close the preview',
+    'viewer.unviewable': 'This kind of file cannot be shown here.',
     'actions.purge': 'Delete permanently',
     'actions.purge.confirmTitle': 'Delete permanently?',
     'actions.purge.confirmMessage':
@@ -160,12 +172,24 @@ const en: MhMessages = {
 }
 
 const fr: MhMessages = {
-    'actions.trash': 'Mettre à la corbeille',
+    'actions.preview': 'Aperçu',
+    'actions.link': 'Copier le lien',
+    'actions.rename': 'Renommer',
+    'actions.duplicate': 'Dupliquer',
+    'actions.download': 'Télécharger',
+    'actions.trash': 'Déplacer vers la corbeille',
     'actions.trash.confirmTitle': 'Mettre à la corbeille ?',
     'actions.trash.confirmMessage': 'Ces fichiers pourront être restaurés depuis la corbeille.',
     'actions.trash.confirmInside':
         '{count} fichier à l’intérieur partira avec, et pourra être restauré depuis la corbeille.|{count} fichiers à l’intérieur partiront avec, et pourront être restaurés depuis la corbeille.',
     'actions.restore': 'Restaurer',
+    'rename.title': 'Renommer',
+    'rename.field': 'Nom',
+    'rename.save': 'Renommer',
+    'rename.cancel': 'Annuler',
+    'viewer.label': 'Aperçu',
+    'viewer.close': 'Fermer l’aperçu',
+    'viewer.unviewable': 'Ce type de fichier ne peut pas être affiché ici.',
     'actions.purge': 'Supprimer définitivement',
     'actions.purge.confirmTitle': 'Supprimer définitivement ?',
     'actions.purge.confirmMessage':

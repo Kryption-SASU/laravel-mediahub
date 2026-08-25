@@ -7,6 +7,8 @@ import type { MhComponentOverride } from '../theme/types'
 import { resolveMediaHub } from '../vue/context'
 import type { MhAction } from './actions'
 import { useMediaActionList } from './actions'
+import type { MhActionSurfaces } from './actions'
+import { GLYPH_BOX } from './glyphs'
 import MhConfirmDialog from './MhConfirmDialog.vue'
 import { useActionRunner } from './useActionRunner'
 
@@ -29,6 +31,11 @@ const props = withDefaults(
         x?: number
         y?: number
         actions?: MhAction[]
+        /**
+         * ⚠️ WHAT THIS MENU CAN OPEN, for the entries that are a surface rather than a request.
+         * Absent, they are not offered — see `MhActionSurfaces`.
+         */
+        surfaces?: MhActionSurfaces
         label?: string
         /**
          * ⚠️ WHERE THE SCREEN IS, so that what is offered makes sense there. "Restore" on a file
@@ -37,6 +44,14 @@ const props = withDefaults(
          * the trash is a fact about the view.
          */
         trashed?: boolean
+        /**
+         * ⚠️ WHETHER SOMEBODY IS BUILDING A BATCH. Half the entries act on exactly one thing —
+         * a file cannot be renamed to two names — and are offered where one thing is being
+         * pointed at rather than where a batch is being assembled. Reading "one is ticked"
+         * instead would show "Rename" for as long as the batch held a single file, and take it
+         * away as soon as a second was added.
+         */
+        picking?: boolean
         client?: MediaHubClient
         ui?: MhComponentOverride
     }>(),
@@ -44,14 +59,25 @@ const props = withDefaults(
         x: 0,
         y: 0,
         actions: undefined,
+        surfaces: undefined,
         label: undefined,
         trashed: false,
+        picking: false,
         client: undefined,
         ui: undefined,
     },
 )
 
-const emit = defineEmits<{ 'update:open': [value: boolean]; done: [action: MhAction] }>()
+const emit = defineEmits<{
+    'update:open': [value: boolean]
+    done: [action: MhAction]
+    /**
+     * ⚠️ WHAT IS BEING WORKED ON, SO THE SCREEN CAN DRAW IT WHERE IT BELONGS. This component
+     * knows an act is running and knows nothing about where the files it names are on screen;
+     * the screen knows the opposite. Neither can show the wait alone.
+     */
+    busy: [selection: Selection | null]
+}>()
 
 const cls = useMediaTheme('contextMenu', () => props.ui)
 const t = useMediaText()
@@ -71,12 +97,22 @@ const { available } = useMediaActionList(
     api,
     () => props.selection,
     () => props.actions,
-    () => ({ trashed: props.trashed }),
+    () => ({ trashed: props.trashed, picking: props.picking }),
+    () => props.surfaces,
 )
 
 const runner = useActionRunner(
     () => props.selection,
     (action) => emit('done', action),
+)
+
+
+/* ⚠️ WATCHED RATHER THAN EMITTED FROM THE HANDLER. The runner clears it in a `finally`, on a
+ * path that also runs when the act failed — reporting from the call site would leave a tile
+ * spinning for ever after an error. */
+watch(
+    () => runner.busy.value,
+    (selection) => emit('busy', selection),
 )
 
 const root = ref<HTMLElement | null>(null)
@@ -223,6 +259,25 @@ function onKeydown(event: KeyboardEvent): void {
             :disabled="runner.running.value"
             @click="choose(action)"
         >
+            <!-- ⚠️ THE DRAWING BELONGS TO THE ACTION, and an entry without one still renders:
+                 a host adding "Publish" gets a label rather than a hole where an icon would
+                 be, and the column does not lose its alignment over it. -->
+            <slot name="icon" :action="action">
+                <svg
+                    v-if="action.icon"
+                    :class="cls('icon')"
+                    :viewBox="GLYPH_BOX"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                >
+                    <path v-for="(drawing, step) in action.icon" :key="step" :d="drawing" />
+                </svg>
+            </slot>
+
             {{ action.label }}
         </button>
     </div>

@@ -8,11 +8,14 @@ import { useMediaBrowser } from '../vue/useMediaBrowser'
 import { useQuota } from '../vue/useQuota'
 import { useSelection } from '../vue/useSelection'
 import { useUpload } from '../vue/useUpload'
-import type { MhAction } from './actions'
+import type { MhAction, MhActionSurfaces } from './actions'
 import MhBreadcrumb from './MhBreadcrumb.vue'
 import { GLYPH_BOX, TRASH_GLYPH } from './glyphs'
 import MhContextMenu from './MhContextMenu.vue'
 import MhDetailsDialog from './MhDetailsDialog.vue'
+import MhLightbox from './MhLightbox.vue'
+import MhRenamer from './MhRenamer.vue'
+import type { MhRenameTarget } from './renaming'
 import MhDropzone from './MhDropzone.vue'
 import MhEmptyState from './MhEmptyState.vue'
 import MhFolderCreator from './MhFolderCreator.vue'
@@ -83,6 +86,33 @@ const quota = useQuota(props.client)
 const upload = useUpload(props.client)
 
 const focused = ref<Media | null>(null)
+
+/**
+ * THE TWO SURFACES THE ACTION LIST CANNOT OWN.
+ *
+ * ⚠️ SHOWING A FILE FULL SCREEN AND ASKING FOR A NEW NAME ARE NOT REQUESTS TO A SERVER. They are
+ * places on this screen, so this screen holds them and lends them to the list — which is also
+ * what keeps "Preview" at the top of the menu instead of underneath "Move to trash", where an
+ * appended action would land.
+ */
+const viewing = ref<Media | null>(null)
+const renaming = ref<MhRenameTarget | null>(null)
+
+/**
+ * WHAT IS BEING WORKED ON, SO THAT THE WAIT IS DRAWN WHERE THE WORK IS.
+ *
+ * ⚠️ NEITHER SIDE COULD SHOW THIS ALONE. The menu and the bar know an act is running and know
+ * nothing about where on screen the files it names are; this screen knows the opposite. Half of
+ * each is why duplicating a large file gave no sign at all until the copy appeared — which reads
+ * as a menu entry that does nothing, and gets clicked again.
+ *
+ * ⚠️ AND IT IS ONE STATE FOR BOTH, because only one act runs at a time: the menu is closed while
+ * a batch is being assembled, and the bar exists only then.
+ */
+const working = ref<Selection | null>(null)
+
+const busyMedia = computed(() => working.value?.media ?? [])
+const busyFolders = computed(() => working.value?.folders ?? [])
 const menu = ref({ open: false, x: 0, y: 0 })
 
 /**
@@ -237,6 +267,47 @@ watch(
  * sixth means "do it to that one". Replacing the selection every time would silently drop four
  * files from an action whose confirmation names a count rather than the files.
  */
+/**
+ * ⚠️ THE THING IS FOUND ON THE PAGE, NOT FETCHED. A selection holds identifiers; what the viewer
+ * and the prompt need is the file itself. It is on screen by construction — nobody can ask to
+ * rename something they cannot see — so asking the server for it again would be a round trip to
+ * learn what is already in hand, and a spinner over a prompt that should be instant.
+ */
+function fileOn(id: string): Media | null {
+    return browser.page.value?.media.find((one) => one.id === id) ?? null
+}
+
+function folderOn(id: string): Folder | null {
+    return browser.page.value?.folders.find((one) => one.id === id) ?? null
+}
+
+const surfaces: MhActionSurfaces = {
+    preview(id: string): void {
+        viewing.value = fileOn(id)
+    },
+
+    rename(selection: Selection): void {
+        const file = selection.media?.[0]
+        const folder = selection.folders?.[0]
+
+        /* ⚠️ THE KIND IS CARRIED RATHER THAN GUESSED LATER. A file and a folder are renamed
+         * through different endpoints, and telling them apart downstream by looking for a
+         * `mime_type` works until a host's folder resource grows one. */
+        const target =
+            file !== undefined
+                ? mapTarget(fileOn(file), 'media')
+                : folder !== undefined
+                  ? mapTarget(folderOn(folder), 'folder')
+                  : null
+
+        renaming.value = target
+    },
+}
+
+function mapTarget(item: Media | Folder | null, kind: 'media' | 'folder'): MhRenameTarget | null {
+    return item === null ? null : { kind, id: item.id, name: item.name }
+}
+
 function openMenu(on: { media?: Media; folder?: Folder }, event: MouseEvent): void {
     /*
      * ⚠️ NEITHER THE PANEL NOR THE SELECTION IS TOUCHED HERE. Asking what can be done to a file
@@ -351,6 +422,7 @@ function onFiltered(types: MediaType[]): void {
             :actions="actions"
             :trashed="trashed"
             :client="client"
+            @busy="working = $event"
             @clear="selection.clear()"
             @done="refreshAll"
         />
@@ -373,6 +445,7 @@ function onFiltered(types: MediaType[]): void {
                         :folders="browser.page.value?.folders ?? []"
                         :picking="picking"
                         :selected="selection.folders.value"
+                        :busy="busyFolders"
                         @open="open"
                         @toggle="selection.toggle('folder', $event.id)"
                         @menu="(folder, where) => openMenu({ folder }, where)"
@@ -385,6 +458,7 @@ function onFiltered(types: MediaType[]): void {
                         :loading="browser.loading.value"
                         :error="browser.error.value"
                         :choosing="picking"
+                        :busy="busyMedia"
                         @current="focused = $event"
                         @activate="focused = $event; emit('open', $event)"
                         @menu="(chosen, where) => openMenu({ media: chosen }, where)"
@@ -425,10 +499,22 @@ function onFiltered(types: MediaType[]): void {
             :selection="acting"
             :actions="actions"
             :trashed="trashed"
+            :picking="picking"
+            :surfaces="surfaces"
             :x="menu.x"
             :y="menu.y"
             :client="client"
+            @busy="working = $event"
             @done="refreshAll"
+        />
+
+        <MhLightbox :media="viewing" :client="client" @close="viewing = null" />
+
+        <MhRenamer
+            :target="renaming"
+            :client="client"
+            @renamed="refreshAll"
+            @close="renaming = null"
         />
     </section>
 </template>
