@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Kryption\MediaHub\Http\Controllers\ArchiveController;
 use Kryption\MediaHub\Http\Controllers\BrowseController;
 use Kryption\MediaHub\Http\Controllers\ContentsController;
+use Kryption\MediaHub\Http\Controllers\DiagnosticsController;
 use Kryption\MediaHub\Http\Controllers\DownloadController;
 use Kryption\MediaHub\Http\Controllers\FolderController;
 use Kryption\MediaHub\Http\Controllers\MediaController;
@@ -39,6 +40,17 @@ use Kryption\MediaHub\Http\Middleware\ValidateSignatureWhenPresent;
  */
 Route::get('/', [BrowseController::class, 'index'])->name('index');
 Route::get('quota', [QuotaController::class, 'show'])->name('quota');
+
+/*
+ * ⚠️ REGISTERED ONLY WHEN THE HOST ASKED FOR IT, rather than registered and refusing. The report
+ * describes this machine — its PHP limits, its loaded extensions — which is modest information
+ * and still information about the server rather than about the library. A door that answers
+ * "403" tells anybody asking that there is something behind it; one that is not there says
+ * nothing at all, and the difference costs one line.
+ */
+if ((bool) config('mediahub.diagnostics.enabled', false)) {
+    Route::get('diagnostics', DiagnosticsController::class)->name('diagnostics');
+}
 
 Route::post('/', [UploadController::class, 'store'])->name('upload');
 

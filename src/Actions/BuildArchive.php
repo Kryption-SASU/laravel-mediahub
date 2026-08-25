@@ -11,7 +11,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Kryption\MediaHub\Exceptions\OperationRejected;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaFolder;
+use Kryption\MediaHub\Support\ArchiveCapacity;
 use Kryption\MediaHub\Support\FolderTree;
+use Kryption\MediaHub\Support\RuntimeLimits;
 use Kryption\MediaHub\ValueObjects\ResolvedItems;
 use ZipStream\CompressionMethod;
 use ZipStream\ZipStream;
@@ -52,6 +54,8 @@ final class BuildArchive
         private readonly FolderTree $tree,
         private readonly FilesystemFactory $filesystems,
         private readonly Config $config,
+        private readonly ArchiveCapacity $capacity,
+        private readonly RuntimeLimits $limits,
     ) {
     }
 
@@ -64,7 +68,13 @@ final class BuildArchive
         $name = $this->safeName($fileName ?? (string) $this->config->get('mediahub.archives.file_name', 'medias.zip'));
 
         return new StreamedResponse(
-            fn () => $this->stream($entries),
+            function () use ($entries): void {
+                /* ⚠️ INSIDE THE CALLBACK, NOT BEFORE IT. The response is built now and sent
+                 * later; clearing buffers while the framework is still assembling it would drop
+                 * output that has not been handed over yet. */
+                $this->clearTheWay();
+                $this->stream($entries);
+            },
             200,
             [
                 'Content-Type' => 'application/zip',
@@ -275,20 +285,74 @@ final class BuildArchive
             throw OperationRejected::because('archive_too_many_files');
         }
 
-        $maxBytes = (int) $this->config->get('mediahub.archives.max_bytes', 2147483648);
-
-        if ($maxBytes <= 0) {
-            return;
-        }
-
         $total = 0;
 
         foreach ($entries as $entry) {
             $total += (int) $entry['media']->size;
         }
 
-        if ($total > $maxBytes) {
+        $maxBytes = (int) $this->config->get('mediahub.archives.max_bytes', 2147483648);
+
+        if ($maxBytes > 0 && $total > $maxBytes) {
             throw OperationRejected::because('archive_too_large');
+        }
+
+        /*
+         * ⚠️ AND WHAT THE CONFIGURATION PERMITS IS NOT WHAT THIS MACHINE CAN FINISH. The two
+         * things that really cut a long download — PHP-FPM's `request_terminate_timeout` and the
+         * front-end server's proxy timeout — cannot be read from inside the process, so the
+         * package works from a budget the host declares and, failing that, a modest assumption.
+         *
+         * ⚠️ A SEPARATE REASON FROM "TOO LARGE", because they call for different actions. One
+         * says the selection exceeds a policy somebody chose; this one says the policy exceeds
+         * the machine, and the fix is in `php-fpm.conf` rather than in the selection.
+         *
+         * ⚠️ AND IT IS A REFUSAL RATHER THAN A BEST EFFORT. Past this point the 200 is gone: an
+         * archive cut off halfway downloads, opens, and is missing files, with nothing anywhere
+         * to say so — not the log, which records a completed request, and not the person, who
+         * has a file.
+         */
+        if ($total > $this->capacity->effectiveCeiling()) {
+            throw OperationRejected::because('archive_beyond_capacity');
+        }
+    }
+
+    /**
+     * MAKING THE CONNECTION THE PLACE THE BYTES GO, rather than memory.
+     *
+     * ⚠️ WITH BUFFERING ON, STREAMING IS A WORD RATHER THAN A BEHAVIOUR. `zlib.output_compression`
+     * and any output buffer still open hold every byte in the process until the response ends: a
+     * two-gigabyte archive becomes a two-gigabyte allocation, which is the exact failure
+     * streaming exists to prevent — and it arrives as an exhausted memory limit, mentioning
+     * neither archives nor buffering.
+     *
+     * ⚠️ COMPRESSING A ZIP A SECOND TIME COSTS PROCESSOR TIME FOR NOTHING, so turning it off is
+     * not merely safe here, it is right.
+     *
+     * ⚠️ AND THE TIME LIMIT IS LIFTED, WHICH IS LEGITIMATE FOR A STREAMED RESPONSE and nearly
+     * beside the point: on Unix `max_execution_time` does not count time spent waiting on input
+     * and output, which is almost all of this. It is lifted anyway, because "nearly" is not
+     * "never" and the cost is one call.
+     *
+     * ⚠️ WHAT IT DELIBERATELY DOES NOT DO IS CLOSE BUFFERS IT DID NOT OPEN. The first version of
+     * this closed everything down to level zero, which is overreach dressed up as care: a buffer
+     * around the request belongs to whoever opened it — the framework, the host's middleware, a
+     * test runner — and ending it discards their output as well as freeing ours. The bench said
+     * so immediately, and it was right. Buffering is reported by the health check instead, where
+     * the person who can act on it will read it.
+     *
+     * ⚠️ EVERY ONE OF THESE MAY BE REFUSED BY THE HOST — pinned directives, `disable_functions` —
+     * and none is checked afterwards. This does what it can, quietly; the report says what could
+     * not be done.
+     */
+    private function clearTheWay(): void
+    {
+        if ($this->limits->canCall('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
+        if ($this->limits->canSet('zlib.output_compression')) {
+            @ini_set('zlib.output_compression', 'Off');
         }
     }
 
@@ -310,6 +374,18 @@ final class BuildArchive
              * have to be seeked backwards — therefore a file, therefore a disk.
              */
             defaultEnableZeroHeader: true,
+
+            /*
+             * ⚠️ EACH FILE IS PUSHED OUT AS IT IS WRITTEN, rather than at the end. Without this,
+             * PHP's own write buffer holds the archive and hands it over in one piece — which
+             * looks like streaming from the outside and is a growing allocation from the inside,
+             * exactly what the zero header above was for.
+             *
+             * ⚠️ AND IT IS THE HONEST WAY TO GET THIS, unlike closing buffers we did not open.
+             * This flushes our own output; whatever the host has wrapped around the request
+             * stays theirs.
+             */
+            flushOutput: true,
         );
 
         $missing = [];
