@@ -74,6 +74,9 @@ export const ZIP_GLYPH: readonly string[] = [
     'M12 11v3',
     'M12 16v2',
 ]
+/** ⚠️ A PULSE, WHICH IS WHAT A HEALTH CHECK LOOKS LIKE EVERYWHERE. A cog would say "settings" —
+ * this button does not change anything, it reads. */
+export const PULSE_GLYPH: readonly string[] = ['M3 12h4l2.5-6 4 12 2.5-6h5']
 
 /** ⚠️ AN EYE, NOT A MAGNIFIER. A magnifier says "search" on every other screen on the machine,
  * and this entry opens something rather than looking for it. */

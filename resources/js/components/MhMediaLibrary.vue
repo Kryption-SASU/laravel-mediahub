@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { Folder, Media, MediaHubClient, MediaSort, MediaType, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
@@ -10,7 +10,7 @@ import { useSelection } from '../vue/useSelection'
 import { useUpload } from '../vue/useUpload'
 import type { MhAction, MhActionSurfaces } from './actions'
 import MhBreadcrumb from './MhBreadcrumb.vue'
-import { GLYPH_BOX, TRASH_GLYPH } from './glyphs'
+import { GLYPH_BOX, PULSE_GLYPH, TRASH_GLYPH } from './glyphs'
 import MhContextMenu from './MhContextMenu.vue'
 import MhDetailsDialog from './MhDetailsDialog.vue'
 import MhLightbox from './MhLightbox.vue'
@@ -20,6 +20,7 @@ import MhDropzone from './MhDropzone.vue'
 import MhEmptyState from './MhEmptyState.vue'
 import MhFolderCreator from './MhFolderCreator.vue'
 import MhFolderList from './MhFolderList.vue'
+import MhHealthReport from './MhHealthReport.vue'
 import MhItemGrid from './MhItemGrid.vue'
 import MhPager from './MhPager.vue'
 import MhQuotaMeter from './MhQuotaMeter.vue'
@@ -45,6 +46,12 @@ const props = withDefaults(
         client?: MediaHubClient
         /** The host's own actions, added to the toolbar and the menu alike. */
         actions?: MhAction[]
+        /**
+         * ⚠️ WHETHER THIS HOST HAS TURNED THE HEALTH REPORT ON — `mediahub.diagnostics.enabled`,
+         * passed through from the page that mounted this screen. The route does not exist when
+         * it is off, so a button shown without it would answer 404.
+         */
+        diagnostics?: boolean
         emptyTitle?: string
         emptyDescription?: string
         /**
@@ -58,6 +65,7 @@ const props = withDefaults(
     {
         client: undefined,
         actions: undefined,
+        diagnostics: false,
         emptyTitle: undefined,
         emptyDescription: undefined,
         selectable: false,
@@ -95,6 +103,26 @@ const focused = ref<Media | null>(null)
  * what keeps "Preview" at the top of the menu instead of underneath "Move to trash", where an
  * appended action would land.
  */
+/**
+ * THE HEALTH REPORT, WHEN THE HOST HAS ASKED FOR IT.
+ *
+ * ⚠️ THE FLAG IS THE SERVER'S, PASSED IN RATHER THAN GUESSED. The route it describes does not
+ * exist unless the same setting is on, so a button drawn on a hunch would be a button that
+ * answers 404 — and the one place that knows is the configuration this screen was mounted from.
+ *
+ * ⚠️ AND THE REPORT IS ASKED FOR ON THE CLICK, NEVER ON THE MOUNT. Reading `php.ini` and probing
+ * extensions every time somebody opens a media library is work nobody asked for.
+ */
+const health = ref<InstanceType<typeof MhHealthReport> | null>(null)
+const reporting = ref(false)
+
+async function openHealth(): Promise<void> {
+    reporting.value = true
+
+    await nextTick()
+    await health.value?.run()
+}
+
 const viewing = ref<Media | null>(null)
 const renaming = ref<MhRenameTarget | null>(null)
 
@@ -403,6 +431,34 @@ function onFiltered(types: MediaType[]): void {
                         :client="client"
                         @created="refreshAll"
                     />
+
+                    <!-- ⚠️ DISCREET AND LAST, because it is not part of the work. It is there for
+                         whoever is setting the package up, and the flag that shows it is meant to
+                         be turned off again afterwards.
+
+                         ⚠️ AND IT CARRIES A NAME DESPITE HAVING NO TEXT: an icon-only control is
+                         announced as "button" to anybody not looking at it. -->
+                    <button
+                        v-if="diagnostics"
+                        type="button"
+                        :class="cls('health')"
+                        :aria-label="t('health.open')"
+                        :title="t('health.open')"
+                        @click="openHealth"
+                    >
+                        <svg
+                            :class="cls('healthIcon')"
+                            :viewBox="GLYPH_BOX"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path v-for="(drawing, step) in PULSE_GLYPH" :key="step" :d="drawing" />
+                        </svg>
+                    </button>
                 </template>
             </MhToolbar>
 
@@ -509,6 +565,13 @@ function onFiltered(types: MediaType[]): void {
         />
 
         <MhLightbox :media="viewing" :client="client" @close="viewing = null" />
+
+        <MhHealthReport
+            ref="health"
+            :open="reporting"
+            :client="client"
+            @close="reporting = false"
+        />
 
         <MhRenamer
             :target="renaming"

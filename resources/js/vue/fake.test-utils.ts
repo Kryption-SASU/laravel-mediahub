@@ -1,4 +1,4 @@
-import type { BrowsePage, Folder, Media, MediaHubClient, Quota } from '../client'
+import type { BrowsePage, Folder, HealthReport, Media, MediaHubClient, Quota } from '../client'
 import { MediaHubError } from '../client'
 
 /**
@@ -15,6 +15,7 @@ export interface FakeClient extends MediaHubClient {
     answerQuota(quota: Quota): void
     failWith(error: MediaHubError | null): void
     answerContents(contents: { media: number; folders: number }): void
+    answerHealth(report: HealthReport): void
 }
 
 export function media(id: string, over: Partial<Media> = {}): Media {
@@ -72,6 +73,10 @@ export function fakeClient(): FakeClient {
     let failure: MediaHubError | null = null
     let contents = { media: 0, folders: 0 }
 
+    /* ⚠️ A CLEAN BILL BY DEFAULT, so a bench that never mentions the report is not quietly
+     * asserting one. What is being reported is the screen's behaviour, not this machine's. */
+    let health: HealthReport = { ok: true, checks: [] }
+
     function record<T>(method: string, args: unknown[], value: T): Promise<T> {
         calls.push({ method, args })
 
@@ -99,6 +104,10 @@ export function fakeClient(): FakeClient {
             contents = next
         },
 
+        answerHealth(report: HealthReport): void {
+            health = report
+        },
+
         url: (path: string) => (path === '' ? '/media' : `/media/${path}`),
         headers: () => ({ Accept: 'application/json' }),
 
@@ -114,6 +123,8 @@ export function fakeClient(): FakeClient {
         contents: (selection) => record('contents', [selection], contents),
         emptyTrash: () => record('emptyTrash', [], { count: 2 }),
         quota: () => record('quota', [], quota),
+        diagnostics: () => record('diagnostics', [], health),
+
         /**
          * ⚠️ IT BUILDS THE FIELDS THE REAL CLIENT BUILDS, and returning an empty set was a trap.
          * A bench checking that a selection reaches the server as a list passed on a form with no

@@ -162,3 +162,27 @@ export interface UploadResult {
     data: Media[]
     errors: UploadRejection[]
 }
+
+/**
+ * ONE FINDING OF THE HEALTH REPORT — what the configuration promises against what the machine
+ * will do.
+ *
+ * ⚠️ THE SENTENCES ARE BUILT BY THE SERVER, NOT HERE. They name directives, measured values and a
+ * value to set, and only the server can read any of that; a client that turned a key into a
+ * sentence would be inventing the numbers.
+ */
+export interface HealthCheck {
+    /** Stable across versions: a host styling or filtering findings refers to this. */
+    id: string
+    level: 'ok' | 'warning' | 'error'
+    title: string
+    detail: string
+    /** What to change. `null` when there is nothing to put right. */
+    recommendation: string | null
+}
+
+export interface HealthReport {
+    /** False as soon as one finding is failing. */
+    ok: boolean
+    checks: HealthCheck[]
+}

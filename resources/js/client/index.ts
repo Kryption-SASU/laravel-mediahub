@@ -38,6 +38,8 @@ export type {
     MediaSort,
     MediaType,
     PageMeta,
+    HealthCheck,
+    HealthReport,
     Quota,
     Selection,
     UploadRejection,
