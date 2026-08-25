@@ -1,12 +1,15 @@
 import { computed, toValue } from 'vue'
 import type { ComputedRef, MaybeRefOrGetter } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
+import { MediaHubError } from '../client'
 import { useMediaText } from '../i18n/context'
 import type { MhTranslator } from '../i18n/context'
+import { requestArchive } from './archive'
 import { copyText } from './clipboard'
 import { startDownload } from './download'
 import {
     DOWNLOAD_GLYPH,
+    ZIP_GLYPH,
     DUPLICATE_GLYPH,
     EYE_GLYPH,
     LINK_GLYPH,
@@ -286,11 +289,50 @@ export function defaultActions(
             id: 'download',
             label: t('actions.download'),
             icon: DOWNLOAD_GLYPH,
-            available: (selection, where) => onlyFile(selection) !== null && ordinary(where),
+            /*
+             * ⚠️ ONE FILE GOES AS ITSELF, AND ANYTHING ELSE GOES AS AN ARCHIVE. The two entries
+             * below are complementary rather than alternative: on any selection outside the
+             * trash, exactly one of them is offered, so there is never a moment where somebody
+             * has ticked something and cannot take it away.
+             *
+             * ⚠️ AND THIS ONE IS OFFERED WHILE A BATCH IS BEING BUILT TOO, unlike the other
+             * single-item entries. Downloading is the one act with an obvious meaning on a batch
+             * of one, and refusing it there would be a rule about our own state rather than
+             * about what somebody asked for.
+             */
+            available: (selection, where) => onlyFile(selection) !== null && ! where.trashed,
             run: async (selection) => {
                 const media = await client.show(onlyFile(selection)!)
 
                 startDownload(media.download_url, media.file_name)
+            },
+        },
+        {
+            id: 'archive',
+            label: t('actions.archive'),
+            icon: ZIP_GLYPH,
+            /*
+             * ⚠️ A FOLDER, OR MORE THAN ONE THING. Zipping a single file is a nuisance dressed as
+             * a feature — somebody wanting one file wants that file — and a folder cannot be
+             * downloaded any other way, since a folder is not an object that has bytes.
+             */
+            available: (selection, where) =>
+                ! isEmpty(selection) && ! where.trashed && onlyFile(selection) === null,
+            /*
+             * ⚠️ NOTHING HERE EVER HOLDS THE ARCHIVE. The request is made by the browser's own
+             * download machinery, because reading the answer would put a streamed ZIP back into
+             * the tab's memory — and it would fail on exactly the archives that most needed
+             * streaming.
+             */
+            run: async (selection) => {
+                const outcome = await requestArchive(client, selection)
+
+                /* ⚠️ A REFUSAL IS RAISED RATHER THAN SWALLOWED, so it reaches the same place
+                 * every other failure on this screen does. The reason is the server's own key,
+                 * and the catalogue turns it into a sentence. */
+                if (outcome.reason !== null) {
+                    throw new MediaHubError(422, outcome.reason, t('errors.' + outcome.reason))
+                }
             },
         },
         {

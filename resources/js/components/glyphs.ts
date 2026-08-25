@@ -65,6 +65,16 @@ export const COPY_GLYPH: readonly string[] = [
 
 export const CLOSE_GLYPH: readonly string[] = ['M6 6l12 12', 'M18 6l-12 12']
 
+/** ⚠️ A BOX WITH A ZIP DOWN ITS FRONT, not a second download arrow. The two entries are never
+ * offered at the same time, but they land in the same place on the menu — and a drawing that
+ * looks identical to the one that was there a moment ago teaches people to stop reading it. */
+export const ZIP_GLYPH: readonly string[] = [
+    'M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v11A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5Z',
+    'M12 6v3',
+    'M12 11v3',
+    'M12 16v2',
+]
+
 /** ⚠️ AN EYE, NOT A MAGNIFIER. A magnifier says "search" on every other screen on the machine,
  * and this entry opens something rather than looking for it. */
 export const EYE_GLYPH: readonly string[] = [

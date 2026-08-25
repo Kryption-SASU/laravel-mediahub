@@ -92,7 +92,9 @@ describe('what can be done to one thing', () => {
     })
 
     it('offers none of them on two', () => {
-        expect(ids({ media: ['m1', 'm2'] })).toEqual(['trash'])
+        /* ⚠️ EXCEPT THE ARCHIVE, which exists precisely for the selections the single-item
+         * entries refuse: one file goes as itself, anything else goes as a ZIP. */
+        expect(ids({ media: ['m1', 'm2'] })).toEqual(['archive', 'trash'])
     })
 
     /**
@@ -101,13 +103,15 @@ describe('what can be done to one thing', () => {
      * the folder, and look like it had obeyed.
      */
     it('offers none of them on a file with a folder beside it', () => {
-        expect(ids({ media: ['m1'], folders: ['f1'] })).toEqual(['trash'])
+        expect(ids({ media: ['m1'], folders: ['f1'] })).toEqual(['archive', 'trash'])
     })
 
     /** ⚠️ RENAMING IS THE ONE THAT MEANS THE SAME THING ON A FOLDER, and it was reachable from
      * nowhere at all. */
-    it('offers renaming on a folder, and nothing else', () => {
-        expect(ids(oneFolder)).toEqual(['rename', 'trash'])
+    /** ⚠️ AND THE ARCHIVE, which is the only way a folder can be downloaded at all: a folder is
+     * not an object that has bytes. */
+    it('offers renaming and the archive on a folder', () => {
+        expect(ids(oneFolder)).toEqual(['rename', 'archive', 'trash'])
     })
 
     /** ⚠️ THE TRASH OFFERS TWO THINGS AND MEANS THEM. Renaming something on its way out, or
@@ -116,8 +120,22 @@ describe('what can be done to one thing', () => {
         expect(ids(oneFile, { trashed: true, picking: false })).toEqual(['restore', 'purge'])
     })
 
+    /**
+     * ⚠️ THE ARCHIVE EITHER, AND IT TAKES A SELECTION OF MORE THAN ONE TO SEE IT. On a single
+     * file the entry is absent for its own reason — one file goes as itself — so a bench that
+     * checked the trash with one file certified nothing about the trash at all, and the mutation
+     * that removed the condition stayed green. What is thrown away is not something to be taken
+     * copies of; it is something to put back or finish with.
+     */
+    it('offers no archive of what is in the trash', () => {
+        expect(ids({ media: ['a', 'b'] }, { trashed: true, picking: false })).toEqual([
+            'restore',
+            'purge',
+        ])
+    })
+
     it('offers none of them while a batch is being built', () => {
-        expect(ids(oneFile, { trashed: false, picking: true })).toEqual(['trash'])
+        expect(ids(oneFile, { trashed: false, picking: true })).toEqual(['download', 'trash'])
     })
 })
 
@@ -790,5 +808,127 @@ describe('waiting, drawn on the thing being waited for', () => {
 
         expect(runner.busy.value).toBeNull()
         expect(runner.error.value).not.toBeNull()
+    })
+})
+
+describe('asking for an archive', () => {
+    /**
+     * ⚠️ THE ARCHIVE IS NEVER READ INTO THE PAGE, and this is the test that keeps it that way.
+     * The server streams the ZIP precisely so that nothing holds it; a `fetch()` followed by a
+     * `blob()` puts the whole thing back into the tab's memory and fails on exactly the archives
+     * that most needed streaming. A form submission hands the request to the browser's own
+     * download machinery, and nothing in JavaScript ever sees the bytes.
+     */
+    it('submits a form rather than fetching anything', async () => {
+        const api = fakeClient()
+        const submitted: HTMLFormElement[] = []
+
+        HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
+            submitted.push(this)
+        }
+
+        void actionOn(api, 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
+        await nextTick()
+
+        expect(submitted).toHaveLength(1)
+        expect(submitted[0]?.method).toBe('post')
+        expect(api.calls.filter((call) => call.method === 'archiveRequest')).toHaveLength(1)
+    })
+
+    /**
+     * ⚠️ `media[]` RATHER THAN `media`. A form sends one value per name; the brackets are what
+     * make PHP read repeated fields as a list, and without them a selection of five files
+     * arrives as one — the archive comes back holding the last file only, and downloads
+     * normally.
+     */
+    it('names the fields so a list arrives as a list', async () => {
+        const submitted: HTMLFormElement[] = []
+
+        HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
+            submitted.push(this)
+        }
+
+        const selection = { media: ['a', 'b'], folders: ['f1'] }
+
+        void actionOn(fakeClient(), 'archive', selection).run(selection)
+        await nextTick()
+
+        const fields = [...(submitted[0]?.querySelectorAll('input') ?? [])].map((one) => [
+            one.name,
+            one.value,
+        ])
+
+        expect(fields).toContainEqual(['media[]', 'a'])
+        expect(fields).toContainEqual(['media[]', 'b'])
+        expect(fields).toContainEqual(['folders[]', 'f1'])
+    })
+
+    /**
+     * ⚠️ A REFUSAL COMES BACK, AND IT IS RAISED RATHER THAN SWALLOWED. The server answers 422
+     * with a reason when an archive is beyond what it can finish; read out of the frame and
+     * dropped, the screen would show nothing at all and the person would wait for a download
+     * that is never coming. Raised, it reaches the same place every other failure does.
+     */
+    it('raises what the server refused', async () => {
+        HTMLFormElement.prototype.submit = function (): void {}
+
+        const selection = { folders: ['f1'] }
+        const running = actionOn(fakeClient(), 'archive', selection).run(selection)
+
+        await nextTick()
+
+        const frame = document.querySelector('iframe[name="mh-archive"]') as HTMLIFrameElement
+
+        /* What a refusal leaves in the frame: a JSON body, where an archive leaves nothing. */
+        if (frame.contentDocument?.body) {
+            frame.contentDocument.body.textContent = JSON.stringify({
+                reason: 'archive_beyond_capacity',
+            })
+        }
+
+        frame.dispatchEvent(new Event('load'))
+
+        await expect(running).rejects.toThrow()
+    })
+
+    /** ⚠️ AND AN EMPTY FRAME IS THE SUCCESS CASE: the browser took the attachment without
+     * navigating it anywhere. */
+    it('says nothing when the download was handed over', async () => {
+        HTMLFormElement.prototype.submit = function (): void {}
+
+        const selection = { folders: ['f1'] }
+        const running = actionOn(fakeClient(), 'archive', selection).run(selection)
+
+        await nextTick()
+
+        const frame = document.querySelector('iframe[name="mh-archive"]') as HTMLIFrameElement
+
+        frame.dispatchEvent(new Event('load'))
+
+        await expect(running).resolves.toBeUndefined()
+    })
+
+    /**
+     * ⚠️ AND IT GOES INTO A HIDDEN FRAME RATHER THAN A NEW TAB. A tab is the usual advice and it
+     * works right up to a refusal: an archive beyond what the machine can finish answers 422 with
+     * a JSON body, which then fills a blank tab with `{"reason":"…"}`. Same origin means the
+     * frame can be read, so the refusal comes back and is shown where the person is looking.
+     */
+    it('sends it into a frame nobody can see', async () => {
+        const submitted: HTMLFormElement[] = []
+
+        HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
+            submitted.push(this)
+        }
+
+        void actionOn(fakeClient(), 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
+        await nextTick()
+
+        expect(submitted[0]?.target).toBe('mh-archive')
+
+        const frame = document.querySelector('iframe[name="mh-archive"]')
+
+        expect(frame).not.toBeNull()
+        expect(frame?.getAttribute('aria-hidden')).toBe('true')
     })
 })

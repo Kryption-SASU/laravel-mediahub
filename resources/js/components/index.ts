@@ -52,6 +52,8 @@ export { renameTo } from './renaming'
 export type { MhRenameTarget } from './renaming'
 export { copyText } from './clipboard'
 export { startDownload } from './download'
+export { requestArchive } from './archive'
+export type { ArchiveOutcome } from './archive'
 export { useActionRunner } from './useActionRunner'
 export type { UseActionRunner } from './useActionRunner'
 

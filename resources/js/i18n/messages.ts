@@ -31,6 +31,7 @@ const en: MhMessages = {
     'actions.rename': 'Rename',
     'actions.duplicate': 'Duplicate',
     'actions.download': 'Download',
+    'actions.archive': 'Download as ZIP',
     'actions.trash': 'Move to trash',
     'actions.trash.confirmTitle': 'Move to the trash?',
     'actions.trash.confirmMessage': 'They can be restored from the trash afterwards.',
@@ -46,6 +47,11 @@ const en: MhMessages = {
     'viewer.label': 'Preview',
     'viewer.close': 'Close the preview',
     'viewer.unviewable': 'This kind of file cannot be shown here.',
+    'errors.archive_beyond_capacity':
+        'This archive is larger than this server can finish sending. Take fewer files at a time.',
+    'errors.archive_too_large': 'This archive is larger than the library allows.',
+    'errors.archive_too_many_files': 'This archive holds more files than the library allows.',
+    'errors.archive_empty': 'There is nothing to put in an archive.',
     'actions.purge': 'Delete permanently',
     'actions.purge.confirmTitle': 'Delete permanently?',
     'actions.purge.confirmMessage':
@@ -177,6 +183,7 @@ const fr: MhMessages = {
     'actions.rename': 'Renommer',
     'actions.duplicate': 'Dupliquer',
     'actions.download': 'Télécharger',
+    'actions.archive': 'Télécharger en ZIP',
     'actions.trash': 'Déplacer vers la corbeille',
     'actions.trash.confirmTitle': 'Mettre à la corbeille ?',
     'actions.trash.confirmMessage': 'Ces fichiers pourront être restaurés depuis la corbeille.',
@@ -190,6 +197,12 @@ const fr: MhMessages = {
     'viewer.label': 'Aperçu',
     'viewer.close': 'Fermer l’aperçu',
     'viewer.unviewable': 'Ce type de fichier ne peut pas être affiché ici.',
+    'errors.archive_beyond_capacity':
+        'Cette archive dépasse ce que ce serveur peut finir d’envoyer. Prenez moins de fichiers à la fois.',
+    'errors.archive_too_large': 'Cette archive dépasse ce que la médiathèque autorise.',
+    'errors.archive_too_many_files':
+        'Cette archive contient plus de fichiers que la médiathèque n’autorise.',
+    'errors.archive_empty': 'Il n’y a rien à mettre dans une archive.',
     'actions.purge': 'Supprimer définitivement',
     'actions.purge.confirmTitle': 'Supprimer définitivement ?',
     'actions.purge.confirmMessage':
