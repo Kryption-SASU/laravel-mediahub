@@ -382,6 +382,7 @@ including that one. The contract says so.
 - [Installation](docs/installation.md)
 - [Usage](docs/usage.md)
 - [Fitting it to your application](docs/fitting.md)
+- [Limits, and the machine underneath them](docs/limits.md)
 - [The browser side](docs/browser.md)
 - [Getting the browser side into your application](docs/delivery.md)
 - [Contributing](CONTRIBUTING.md)
