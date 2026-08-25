@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { UploadItem } from '../client'
 import MhDropzone from './MhDropzone.vue'
 import MhQuotaMeter from './MhQuotaMeter.vue'
+import MhUploadButton from './MhUploadButton.vue'
 import MhUploadQueue from './MhUploadQueue.vue'
 
 function file(name: string): File {
@@ -29,17 +30,38 @@ function drop(files: File[]): { dataTransfer: { files: File[] } } {
 
 describe('dropping files', () => {
     /**
-     * ⚠️ THE FILE INPUT IS NOT A FALLBACK, IT IS THE ONLY ROUTE FOR SOME PEOPLE. Dragging cannot
-     * be done from a keyboard, is awkward with a screen reader and is impossible on most touch
-     * devices — so it is a labelled control rather than something hidden behind a click handler.
+     * ⚠️ IT WRAPS THE LISTING RATHER THAN SITTING ABOVE IT. A dashed rectangle parked over the
+     * grid accepted a drop on its own few hundred pixels and nowhere else — so a file let go
+     * over the files, which is where the hand goes, was opened by the browser and took the page
+     * with it.
      */
-    it('offers a real, labelled file input', () => {
-        const wrapper = mount(MhDropzone, { props: { label: 'Add files' } })
-        const input = wrapper.find('input[type="file"]')
+    it('makes a drop target of whatever it wraps', () => {
+        const wrapper = mount(MhDropzone, { slots: { default: '<p id="listing">files</p>' } })
 
-        expect(input.exists()).toBe(true)
-        expect(input.attributes('multiple')).toBeDefined()
-        expect(wrapper.find('label').attributes('for')).toBe(input.attributes('id'))
+        expect(wrapper.find('#listing').exists()).toBe(true)
+    })
+
+    /**
+     * ⚠️ AND IT NO LONGER CARRIES THE FILE INPUT. The keyboard route is a primary control, not a
+     * detail of a drag affordance: it lives in `MhUploadButton` now. Two inputs on one screen
+     * would be two answers to "how do I add a file", one of them buried in the listing.
+     */
+    it('leaves the keyboard route to the upload button', () => {
+        expect(mount(MhDropzone).find('input[type="file"]').exists()).toBe(false)
+    })
+
+    /**
+     * ⚠️ THE INVITATION IS SHOWN WHILE SOMETHING IS HELD, AND ONLY THEN. At rest it would be a
+     * banner across the files, which is what the dashed rectangle already was.
+     */
+    it('says what a drop will do, only while something is being held', async () => {
+        const wrapper = mount(MhDropzone, { props: { label: 'Drop to upload' } })
+
+        expect(wrapper.text()).not.toContain('Drop to upload')
+
+        await wrapper.trigger('dragenter')
+
+        expect(wrapper.text()).toContain('Drop to upload')
     })
 
     it('reports what was dropped', async () => {
@@ -97,6 +119,74 @@ describe('dropping files', () => {
         await wrapper.trigger('dragleave')
 
         expect(wrapper.classes().join(' ')).toBe(before)
+    })
+})
+
+describe('the button that opens a file picker', () => {
+    function chosen(wrapper: ReturnType<typeof mount>, files: File[]): Promise<void> {
+        const input = wrapper.find('input[type="file"]')
+
+        /* ⚠️ `files` IS READ-ONLY ON A REAL INPUT, and there is no way to fill it from a script.
+         * Defining it is the only way to exercise the handler at all; the alternative is to
+         * leave the one route a keyboard user has with no test behind it. */
+        Object.defineProperty(input.element, 'files', { value: files, configurable: true })
+
+        /* ⚠️ AND `value` HAS TO BE PUT BACK TOO, or the assertion that it was emptied proves
+         * nothing: a file input starts empty, so "it is empty afterwards" is true whether or not
+         * anybody cleared it. Caught by mutation on 25/08/2026 — the check was passing against
+         * code that had stopped clearing anything. */
+        Object.defineProperty(input.element, 'value', {
+            value: files.length > 0 ? 'C:\\fakepath\\' + files[0]?.name : '',
+            writable: true,
+            configurable: true,
+        })
+
+        return input.trigger('change')
+    }
+
+    /**
+     * ⚠️ THE FILE INPUT IS NOT A FALLBACK, IT IS THE ONLY ROUTE FOR SOME PEOPLE. Dragging cannot
+     * be done from a keyboard, is awkward with a screen reader and is impossible on most touch
+     * devices — so it stays a real, labelled control rather than something hidden behind a click
+     * handler on a `display: none` element.
+     */
+    it('offers a real, labelled file input', () => {
+        const wrapper = mount(MhUploadButton)
+        const input = wrapper.find('input[type="file"]')
+
+        expect(input.exists()).toBe(true)
+        expect(input.attributes('multiple')).toBeDefined()
+        expect(wrapper.find('label').attributes('for')).toBe(input.attributes('id'))
+    })
+
+    it('reports what was chosen', async () => {
+        const wrapper = mount(MhUploadButton)
+
+        await chosen(wrapper, [file('a.png'), file('b.png')])
+
+        expect(wrapper.emitted('files')?.[0]?.[0]).toHaveLength(2)
+    })
+
+    /**
+     * ⚠️ THE INPUT IS EMPTIED AFTERWARDS. Choosing the same file twice in a row fires no `change`
+     * event otherwise — the value has not changed — and the second attempt does nothing, which
+     * reads as the button being broken.
+     */
+    it('empties itself so the same file can be chosen again', async () => {
+        const wrapper = mount(MhUploadButton)
+
+        await chosen(wrapper, [file('a.png')])
+
+        expect((wrapper.find('input[type="file"]').element as HTMLInputElement).value).toBe('')
+    })
+
+    /** ⚠️ A DISMISSED PICKER IS NOT AN UPLOAD: it fires `change` with nothing in it. */
+    it('says nothing when the picker was dismissed', async () => {
+        const wrapper = mount(MhUploadButton)
+
+        await chosen(wrapper, [])
+
+        expect(wrapper.emitted('files')).toBeUndefined()
     })
 })
 

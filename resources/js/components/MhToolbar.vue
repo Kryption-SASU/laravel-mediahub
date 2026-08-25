@@ -101,50 +101,63 @@ function onType(event: Event): void {
 
 <template>
     <div :class="cls('root')">
+        <!-- ⚠️ WHAT YOU CAN DO COMES FIRST, AND IT COMES FROM THE SCREEN. Uploading and creating
+             a folder need a client and a current folder; a toolbar that reached for either would
+             stop being a toolbar. It offers the place, the screen above puts the controls in it.
+             Absent, the row is not merely empty — the element is not rendered, so it takes none
+             of the gap either. -->
+        <div v-if="$slots.start" :class="cls('start')">
+            <slot name="start" />
+        </div>
+
+        <div :class="cls('filters')">
+            <div :class="cls('group')">
+                <label :class="cls('label')" :for="typeId">{{ words.type }}</label>
+                <select
+                    :id="typeId"
+                    :class="cls('select')"
+                    :value="types[0] ?? ''"
+                    @change="onType"
+                >
+                    <option value="">{{ words.allTypes }}</option>
+                    <!-- ⚠️ THE KIND IS TRANSLATED, NOT PRINTED. `document` is a value in a
+                         payload, not a word anybody chose to show somebody. -->
+                    <option v-for="kind in MEDIA_TYPES" :key="kind" :value="kind">
+                        {{ t('types.' + kind) }}
+                    </option>
+                </select>
+            </div>
+
+            <div :class="cls('group')">
+                <label :class="cls('label')" :for="sortId">{{ words.sort }}</label>
+                <select :id="sortId" :class="cls('select')" :value="sort" @change="onSort">
+                    <option v-for="option in SORTS" :key="option" :value="option">
+                        {{ t('toolbar.sort.' + option) }}
+                    </option>
+                </select>
+
+                <!--
+                    ⚠️ THE BUTTON SAYS WHAT IT WILL DO, NOT WHAT IS. An arrow alone is read out as
+                    nothing at all, and "ascending" as a label leaves somebody unable to tell the
+                    current state from the offered one.
+                -->
+                <button
+                    type="button"
+                    :class="cls('direction')"
+                    :aria-label="direction === 'asc' ? t('toolbar.sortDescending') : t('toolbar.sortAscending')"
+                    @click="onDirection"
+                >
+                    {{ direction === 'asc' ? '↑' : '↓' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- ⚠️ LAST IN THE MARKUP, PUSHED TO THE END BY THE THEME. Placed there instead, it
+             would be stranded mid-row the moment the toolbar wraps on a narrow screen. -->
         <form :class="cls('search')" role="search" @submit.prevent="$emit('search', term)">
             <label :class="cls('label')" :for="searchId">{{ words.search }}</label>
             <input :id="searchId" v-model="term" :class="cls('input')" type="search" />
         </form>
-
-        <div :class="cls('group')">
-            <label :class="cls('label')" :for="typeId">{{ words.type }}</label>
-            <select
-                :id="typeId"
-                :class="cls('select')"
-                :value="types[0] ?? ''"
-                @change="onType"
-            >
-                <option value="">{{ words.allTypes }}</option>
-                <!-- ⚠️ THE KIND IS TRANSLATED, NOT PRINTED. `document` is a value in a payload,
-                     not a word anybody chose to show somebody. -->
-                <option v-for="kind in MEDIA_TYPES" :key="kind" :value="kind">
-                    {{ t('types.' + kind) }}
-                </option>
-            </select>
-        </div>
-
-        <div :class="cls('group')">
-            <label :class="cls('label')" :for="sortId">{{ words.sort }}</label>
-            <select :id="sortId" :class="cls('select')" :value="sort" @change="onSort">
-                <option v-for="option in SORTS" :key="option" :value="option">
-                    {{ t('toolbar.sort.' + option) }}
-                </option>
-            </select>
-
-            <!--
-                ⚠️ THE BUTTON SAYS WHAT IT WILL DO, NOT WHAT IS. An arrow alone is read out as
-                nothing at all, and "ascending" as a label leaves somebody unable to tell the
-                current state from the offered one.
-            -->
-            <button
-                type="button"
-                :class="cls('direction')"
-                :aria-label="direction === 'asc' ? t('toolbar.sortDescending') : t('toolbar.sortAscending')"
-                @click="onDirection"
-            >
-                {{ direction === 'asc' ? '↑' : '↓' }}
-            </button>
-        </div>
 
         <slot />
     </div>

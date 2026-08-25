@@ -13,9 +13,39 @@ function panel(props: Record<string, unknown> = {}) {
     return { wrapper, api }
 }
 
+/**
+ * ⚠️ FIELDS ARE FOUND BY THEIR LABEL, NOT BY THEIR POSITION. The panel gained an address field
+ * above these two, and every `findAll('input')[0]` quietly started editing that one instead —
+ * each test then failed on an assertion three lines later, which is a slow and misleading way to
+ * learn that a selector moved. The same goes for `find('button')`: the copy button now comes
+ * first in the markup.
+ */
+function field(wrapper: ReturnType<typeof mount>, label: string) {
+    const tag = wrapper.findAll('label').find((candidate) => candidate.text() === label)
+
+    return wrapper.find('#' + String(tag?.attributes('for')))
+}
+
+function save(wrapper: ReturnType<typeof mount>) {
+    return wrapper.findAll('button').filter((button) => button.text() === 'Save')[0]
+}
+
 describe('the details of one file', () => {
-    it('shows nothing when nothing is selected', () => {
-        expect(panel({ media: null }).wrapper.find('aside').exists()).toBe(false)
+    /**
+     * ⚠️ THE RESTING PANEL IS RENDERED, AND THAT IS THE POINT OF IT. Omitted, the column appears
+     * on the first click and shoves the grid sideways under the pointer that caused it — and
+     * until that click nothing on screen suggests that choosing a file shows anything at all.
+     */
+    it('holds its column open with nothing selected', () => {
+        const wrapper = panel({ media: null }).wrapper
+
+        expect(wrapper.find('aside').exists()).toBe(true)
+        expect(wrapper.text()).toContain('No selection')
+    })
+
+    /** ⚠️ AND IT IS NOT THE FORM. Fields for a file nobody chose would save onto nothing. */
+    it('offers nothing to edit while nothing is selected', () => {
+        expect(panel({ media: null }).wrapper.find('input').exists()).toBe(false)
     })
 
     it('spells the size out rather than showing bytes', () => {
@@ -43,9 +73,10 @@ describe('the details of one file', () => {
             media: media('m1', { name: 'Report', custom_properties: { alt: 'A bar chart' } }),
         })
 
-        const values = wrapper.findAll('input').map((input) => (input.element as HTMLInputElement).value)
-
-        expect(values).toEqual(['Report', 'A bar chart'])
+        expect((field(wrapper, 'Name').element as HTMLInputElement).value).toBe('Report')
+        expect((field(wrapper, 'Alternative text').element as HTMLInputElement).value).toBe(
+            'A bar chart',
+        )
     })
 
     /**
@@ -56,28 +87,28 @@ describe('the details of one file', () => {
     it('resets when another file is shown', async () => {
         const { wrapper } = panel()
 
-        await wrapper.findAll('input')[0]?.setValue('Half-typed')
+        await field(wrapper, 'Name').setValue('Half-typed')
         await wrapper.setProps({ media: media('m2', { name: 'Invoice' }) })
 
-        expect((wrapper.findAll('input')[0]?.element as HTMLInputElement).value).toBe('Invoice')
+        expect((field(wrapper, 'Name').element as HTMLInputElement).value).toBe('Invoice')
     })
 
     /** ⚠️ NOTHING TO SAVE MEANS NOTHING TO PRESS — otherwise a click rewrites a record with itself. */
     it('cannot be saved while nothing changed', async () => {
         const { wrapper } = panel()
 
-        expect(wrapper.find('button').attributes('disabled')).toBeDefined()
+        expect(save(wrapper)?.attributes('disabled')).toBeDefined()
 
-        await wrapper.findAll('input')[0]?.setValue('Renamed')
+        await field(wrapper, 'Name').setValue('Renamed')
 
-        expect(wrapper.find('button').attributes('disabled')).toBeUndefined()
+        expect(save(wrapper)?.attributes('disabled')).toBeUndefined()
     })
 
     it('renames when the name changed', async () => {
         const { wrapper, api } = panel()
 
-        await wrapper.findAll('input')[0]?.setValue('Renamed')
-        await wrapper.find('button').trigger('click')
+        await field(wrapper, 'Name').setValue('Renamed')
+        await save(wrapper)?.trigger('click')
         await nextTick()
 
         expect(api.calls[0]?.method).toBe('update')
@@ -92,8 +123,8 @@ describe('the details of one file', () => {
     it('sends nothing about the text when only the name changed', async () => {
         const { wrapper, api } = panel()
 
-        await wrapper.findAll('input')[0]?.setValue('Renamed')
-        await wrapper.find('button').trigger('click')
+        await field(wrapper, 'Name').setValue('Renamed')
+        await save(wrapper)?.trigger('click')
         await nextTick()
 
         expect(api.calls).toHaveLength(1)
@@ -102,8 +133,8 @@ describe('the details of one file', () => {
     it('writes the alternative text when that is what changed', async () => {
         const { wrapper, api } = panel()
 
-        await wrapper.findAll('input')[1]?.setValue('A bar chart')
-        await wrapper.find('button').trigger('click')
+        await field(wrapper, 'Alternative text').setValue('A bar chart')
+        await save(wrapper)?.trigger('click')
         await nextTick()
 
         expect(api.calls).toHaveLength(1)
@@ -113,10 +144,106 @@ describe('the details of one file', () => {
     it('reports what it saved', async () => {
         const { wrapper } = panel()
 
-        await wrapper.findAll('input')[0]?.setValue('Renamed')
-        await wrapper.find('button').trigger('click')
+        await field(wrapper, 'Name').setValue('Renamed')
+        await save(wrapper)?.trigger('click')
         await nextTick()
 
         expect(wrapper.emitted('updated')).toHaveLength(1)
+    })
+})
+
+describe('what the panel says about a file', () => {
+    /**
+     * ⚠️ THE ADDRESS IS A FIELD, NOT A LINE OF TEXT. A `<span>` cannot be selected reliably, and
+     * the clipboard API does not exist outside a secure context — which is to say on every
+     * `http://` development host there is. Read-only and selectable, there is always a way to
+     * take it.
+     */
+    it('shows the address as something you can select', () => {
+        const url = field(panel().wrapper, 'Full url')
+
+        expect(url.attributes('readonly')).toBeDefined()
+        expect((url.element as HTMLInputElement).value).toBe('/media/m1/file')
+    })
+
+    it('copies the address, and says it did', async () => {
+        const written: string[] = []
+
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: (text: string) => { written.push(text); return Promise.resolve() } },
+            configurable: true,
+        })
+
+        const { wrapper } = panel()
+
+        await wrapper.findAll('button').filter((button) => button.text() === 'Copy')[0]?.trigger('click')
+        await nextTick()
+
+        expect(written).toEqual(['/media/m1/file'])
+        expect(wrapper.text()).toContain('Copied')
+    })
+
+    /**
+     * ⚠️ AND IT ONLY SAYS SO WHEN IT REALLY HAPPENED. Announcing "Copied" over a clipboard that
+     * refused — no secure context, no permission, the document not focused — sends somebody off
+     * to paste nothing, and the failure surfaces somewhere else entirely.
+     */
+    it('does not claim to have copied when nothing did', async () => {
+        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+        Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true })
+
+        const { wrapper } = panel()
+
+        await wrapper.findAll('button').filter((button) => button.text() === 'Copy')[0]?.trigger('click')
+        await nextTick()
+
+        expect(wrapper.text()).not.toContain('Copied')
+    })
+
+    it('gives the moments the file carries', () => {
+        const { wrapper } = panel({
+            media: media('m1', {
+                created_at: '2026-08-12T09:30:00+00:00',
+                updated_at: '2026-08-13T09:30:00+00:00',
+            }),
+        })
+
+        expect(wrapper.text()).toContain('Uploaded at')
+        expect(wrapper.text()).toContain('Modified at')
+        expect(wrapper.text()).toContain('2026')
+    })
+
+    /** ⚠️ A MOMENT THE SERVER DID NOT GIVE IS ABSENT, not a term with nothing under it. */
+    it('says nothing about a moment it was not given', () => {
+        const { wrapper } = panel({ media: media('m1', { created_at: null, updated_at: null }) })
+
+        expect(wrapper.text()).not.toContain('Uploaded at')
+    })
+
+    /** ⚠️ NOR DOES IT PRINT "Invalid Date" — which reads as a fact we lost rather than never had. */
+    it('says nothing about a moment it cannot read', () => {
+        const { wrapper } = panel({ media: media('m1', { created_at: 'not a date' }) })
+
+        expect(wrapper.text()).not.toContain('Invalid')
+    })
+})
+
+describe('the panel as a way of choosing', () => {
+    /**
+     * ⚠️ NO BUTTON WHERE NOBODY IS WAITING. A library opened from a menu has no caller: an
+     * "use this file" button there hands the file to nobody, and the click does nothing at all.
+     * The library being replaced applies the same rule — its own insert button stays hidden
+     * unless the panel was opened from a field.
+     */
+    it('offers nothing to use when nobody asked for a file', () => {
+        expect(panel().wrapper.text()).not.toContain('Use this file')
+    })
+
+    it('hands the file over when somebody did', async () => {
+        const { wrapper } = panel({ selectable: true })
+
+        await wrapper.findAll('button').filter((b) => b.text() === 'Use this file')[0]?.trigger('click')
+
+        expect(wrapper.emitted('use')?.[0]?.[0]).toMatchObject({ id: 'm1' })
     })
 })

@@ -121,6 +121,44 @@ describe('the thumbnail', () => {
 
         expect(wrapper.attributes('style')).toContain('width: 64px')
     })
+
+    /**
+     * ⚠️ A FILE THAT CANNOT BE PICTURED IS DRAWN, NOT SPELLED OUT. The tile used to print the
+     * first four letters of the extension, falling back to the kind — so a video with no
+     * extension rendered a box reading "VIDE", which is a French word, and the wrong one.
+     */
+    it('draws the kind when there is nothing to show', () => {
+        const wrapper = mount(MhThumbnail, { props: { media: media({ type: 'video' }) } })
+
+        expect(wrapper.find('svg').exists()).toBe(true)
+        expect(wrapper.text()).not.toContain('VIDE')
+    })
+
+    /** ⚠️ AND EACH KIND IS ITS OWN DRAWING: one glyph for six kinds says nothing at a glance. */
+    it('draws a different thing for a different kind', () => {
+        const drawing = (kind: Media['type']): string =>
+            mount(MhThumbnail, { props: { media: media({ type: kind }) } }).find('svg').html()
+
+        expect(drawing('video')).not.toBe(drawing('audio'))
+        expect(drawing('document')).not.toBe(drawing('external'))
+    })
+
+    /**
+     * ⚠️ THE EXTENSION STAYS UNDER THE GLYPH, BECAUSE SIX KINDS DO NOT ANSWER EVERYTHING. "Is
+     * this a PDF or a Word document" is the question actually asked of a document tile.
+     */
+    it('keeps the extension beside the drawing', () => {
+        const wrapper = mount(MhThumbnail, { props: { media: media({ extension: 'pdf' }) } })
+
+        expect(wrapper.text()).toContain('pdf')
+    })
+
+    /** ⚠️ ABSENT, NOTHING IS PRINTED: an empty caption reserves a line for a word never coming. */
+    it('prints no caption for a file without an extension', () => {
+        const wrapper = mount(MhThumbnail, { props: { media: media({ extension: null }) } })
+
+        expect(wrapper.text()).toBe('')
+    })
 })
 
 describe('the empty state', () => {
