@@ -729,19 +729,49 @@ export const defaultTheme: MhTheme = {
             class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)]',
         },
         /*
-         * ⚠️ THE LEVEL IS A WORD AS WELL AS A COLOUR. Colour alone is unreadable to a tenth of
-         * the people looking at it, and to everybody printing the page.
+         * ⚠️ A DISC AND A DRAWING, READ BEFORE THE WORD. A page of findings is scanned before it
+         * is read, and a column of identical grey labels makes somebody read all of it to learn
+         * whether there is anything to do.
+         *
+         * ⚠️ AND THE COLOURS ARE LITERAL HERE, DELIBERATELY. Green and amber mean one thing on
+         * this list and are not part of the library's palette; borrowing `--mh-color-accent` for
+         * "sound" would turn every finding the host's brand colour and say nothing at all.
          */
-        error: {
-            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
+        badge: {
+            layout: 'flex items-center gap-2',
+            class: '',
+        },
+        dotOk: {
+            layout: 'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+            class: 'bg-emerald-600 text-white',
+        },
+        dotWarning: {
+            layout: 'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+            class: 'bg-amber-500 text-white',
+        },
+        dotError: {
+            layout: 'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
             class: 'bg-[var(--mh-color-danger,#b91c1c)] text-[var(--mh-color-danger-foreground,#ffffff)]',
         },
+        markIcon: {
+            layout: 'h-3 w-3',
+            class: '',
+        },
+        /*
+         * ⚠️ THE LEVEL IS STILL A WORD. Colour alone is unreadable to a tenth of the people
+         * looking at it and to everybody printing the page — and a tick and a cross at sixteen
+         * pixels are not as different as they look when neither colour arrives.
+         */
+        error: {
+            layout: 'text-xs font-semibold uppercase',
+            class: 'text-[var(--mh-color-danger,#b91c1c)]',
+        },
         warning: {
-            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
-            class: 'bg-[var(--mh-color-foreground,#0f172a)] text-[var(--mh-color-surface,#ffffff)]',
+            layout: 'text-xs font-semibold uppercase',
+            class: 'text-[var(--mh-color-foreground,#0f172a)]',
         },
         ok: {
-            layout: 'w-fit rounded px-2 py-0.5 text-xs font-semibold uppercase',
+            layout: 'text-xs font-semibold uppercase',
             class: 'text-[var(--mh-color-muted-foreground,#475569)]',
         },
     },
