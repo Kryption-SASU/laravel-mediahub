@@ -6,12 +6,14 @@ namespace Kryption\MediaHub\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Kryption\MediaHub\Actions\UploadMedia;
+use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Exceptions\QuotaExceeded;
 use Kryption\MediaHub\Exceptions\UploadRejected;
 use Kryption\MediaHub\Http\Requests\UploadMediaRequest;
 use Kryption\MediaHub\Http\Resources\MediaResource;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Support\FolderLocator;
+use Kryption\MediaHub\Support\OwnerContext;
 use Kryption\MediaHub\ValueObjects\UploadedPayload;
 
 /**
@@ -36,6 +38,7 @@ final class UploadController
     public function __construct(
         private readonly UploadMedia $upload,
         private readonly FolderLocator $folders,
+        private readonly MediaOwner $owner,
     ) {
     }
 
@@ -43,7 +46,16 @@ final class UploadController
     {
         $folder = $this->folders->optional($request->input('folder'));
 
-        $context = $folder === null ? [] : ['folder_id' => $folder->getKey()];
+        /*
+         * ⚠️ THE FILE BELONGS TO WHOEVER SENT IT. Nothing here used to say so, and on an adopted
+         * schema whose `user_id` is `NOT NULL` that is not a missing fact but a refused insert:
+         * uploading through the API did not work at all.
+         */
+        $context = OwnerContext::for(Media::class, $this->owner);
+
+        if ($folder !== null) {
+            $context['folder_id'] = $folder->getKey();
+        }
 
         $uploaded = [];
         $refused = [];

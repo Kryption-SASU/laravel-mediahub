@@ -6,6 +6,7 @@ namespace Kryption\MediaHub\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Kryption\MediaHub\Contracts\AccessPolicy;
+use Kryption\MediaHub\Http\Requests\Concerns\NormalisesKeys;
 use Kryption\MediaHub\Models\Media;
 
 /**
@@ -21,6 +22,17 @@ use Kryption\MediaHub\Models\Media;
  */
 final class UpdateMediaRequest extends FormRequest
 {
+    use NormalisesKeys;
+
+    /**
+     * ⚠️ THE DESTINATION FOLDER IS A KEY IN ITS DECLARED FORM — the same reason as everywhere
+     * else here: under the `legacy` preset it is the host's integer `id`.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->normaliseKeys(['folder']);
+    }
+
     public function authorize(): bool
     {
         $media = $this->route('media');

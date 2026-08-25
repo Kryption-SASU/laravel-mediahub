@@ -174,13 +174,24 @@ migrations and makes no assumption about a schema; you supply the reads and writ
 
 ## Moving between modes
 
-There is no migration path to run, because there is nothing to migrate: the mode decides **which
-tables are read**, not where data goes.
+No data moves, because the mode decides **which tables are read**, not where anything goes.
 
 - **`standalone` → `table`**: the package stops reading its own tables and starts reading yours.
   Anything already uploaded through it stays in `mediahub_files`, invisible until you switch back
   or move those rows yourself.
 - **`table` → `standalone`**: your tables are left exactly as they were.
+
+⚠️ **But run `migrate` after the switch, because one table is shared.** `mediahub_conversions` is
+needed in both modes and named the same in both — it is the only one that does not simply fall out
+of use. Its shape differs: `standalone` gives it a foreign key onto `mediahub_files`, and under
+`table` the media live in yours, so that key points at rows which will never exist and every
+derivative insert fails. The migration takes the table over on the next run *if it is empty*, and
+refuses with an explanation if it holds rows — those are the standalone library's derivatives, and
+what they are worth is not a migration's decision.
+
+The tables that do fall out of use — `mediahub_files`, `mediahub_folders`, `mediahub_mediables`
+going one way, nothing going the other — are left where they are. Nothing reads them, nothing
+cleans them up, and dropping them is yours to do once you are sure of it.
 
 ⚠️ **What does not move on its own is the files on the storage.** Both modes write to the disk
 named in the configuration; changing the mode does not relocate a single byte, and it is not

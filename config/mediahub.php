@@ -186,6 +186,18 @@ return [
         'scope' => null,
         'policy' => null,
         'quota' => null,
+
+        /*
+         * ⚠️ WHO OWNS WHAT IS CREATED. Left null, it is the user signed in on the configured
+         * guard — the right answer almost everywhere, and the reason `composer require` is
+         * enough. A host keying ownership on something else — a team, a tenant, an impersonated
+         * account — names its own `MediaOwner` here.
+         *
+         * ⚠️ AND IT IS NOT DECORATIVE ON AN ADOPTED SCHEMA. Where `user_id` is `NOT NULL`, an
+         * owner nobody supplies is not a missing fact but a refused insert: uploading a file and
+         * creating a folder both fail on a constraint.
+         */
+        'owner' => null,
     ],
 
     /*

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Kryption\MediaHub\Backends\HostSchema;
+use Kryption\MediaHub\Exceptions\StorageMisconfigured;
 
 /**
  * THE CONVERSIONS TABLE, FOR AN ADOPTED SCHEMA THAT HAS NONE.
@@ -39,7 +41,11 @@ return new class extends Migration
          * derivatives: it sets `null`, and this migration does nothing rather than inventing a
          * table under a prefix it is not expecting.
          */
-        if ($table === null || Schema::hasTable($table)) {
+        if ($table === null) {
+            return;
+        }
+
+        if (Schema::hasTable($table) && ! self::reclaim($table)) {
             return;
         }
 
@@ -72,6 +78,54 @@ return new class extends Migration
 
             $blueprint->unique(['media_id', 'name']);
         });
+    }
+
+    /**
+     * THE ONE TABLE THE TWO MODES SHARE A NAME FOR — and only one of the two shapes works here.
+     *
+     * ⚠️ THIS IS WHY A DRIVER SWITCH IS NOT FREE, THOUGH IT LOOKS AS IF IT SHOULD BE. Changing
+     * `backend.driver` to `table` does leave `mediahub_files`, `mediahub_folders` and
+     * `mediahub_mediables` unused and harmless — nothing reads them again. But `conversions` is
+     * needed in BOTH modes and is named the same in both: standalone gives it a `bigint` key and
+     * a foreign key onto `mediahub_files`, and here the media live in the HOST's table, so that
+     * key points at rows that will never exist. The table is not left behind, it is still in
+     * use, and it is wrong.
+     *
+     * ⚠️ AND THE ORDINARY INSTALLATION ORDER PRODUCES EXACTLY THAT. The package ships with
+     * `standalone`, so `composer require` then `migrate` — before anyone has set the driver —
+     * creates the whole standalone schema. Measured on a real host on 25/08/2026: every upload
+     * of an image failed on a constraint violation, days after the migration that caused it.
+     *
+     * ⚠️ SO IT TAKES THE TABLE OVER WHEN NOTHING IS IN IT, and only raises when there is. An
+     * empty leftover is exactly what the person switching drivers expects not to have to think
+     * about; a populated one is a library of derivatives, and dropping it is not a decision a
+     * migration gets to take on somebody's behalf.
+     *
+     * @return bool Whether the caller should now create the table.
+     */
+    private static function reclaim(string $table): bool
+    {
+        /* ⚠️ NO FOREIGN KEY MEANS THIS MIGRATION MADE IT: running twice must change nothing. */
+        if (Schema::getForeignKeys($table) === []) {
+            return false;
+        }
+
+        $rows = DB::table($table)->count();
+
+        if ($rows > 0) {
+            throw StorageMisconfigured::because(
+                "`{$table}` already exists, carries a foreign key and holds {$rows} rows, so it "
+                .'was created by the standalone migration and has been used. In `table` mode the '
+                ."media live in the host's own table, so that key points at rows that do not "
+                .'exist there and every conversion insert fails. Decide what those rows are '
+                ."worth: they belong to the standalone library. Drop `{$table}` once you are "
+                .'sure, then migrate again.'
+            );
+        }
+
+        Schema::drop($table);
+
+        return true;
     }
 
     public function down(): void
