@@ -455,11 +455,21 @@ export const defaultTheme: MhTheme = {
          * take all three away and leave a control only a mouse can reach.
          */
         label: {
-            layout: 'inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            layout: 'inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md',
             class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)] hover:opacity-90',
         },
+        /*
+         * ⚠️ `sr-only` RATHER THAN NO TEXT AT ALL. A toolbar of glyphs reads as a tool; a toolbar
+         * of glyphs with nothing to announce reads as a row of unnamed buttons to anybody not
+         * looking at it. The word stays in one place, in every language, and a host that wants it
+         * on screen replaces this one string.
+         */
+        wording: {
+            layout: 'sr-only',
+            class: '',
+        },
         icon: {
-            layout: 'h-4 w-4 shrink-0',
+            layout: 'h-5 w-5 shrink-0',
             class: '',
         },
         input: {
@@ -474,11 +484,16 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         trigger: {
-            layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            layout: 'inline-flex h-9 w-9 items-center justify-center rounded-md',
             class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
         },
+        /* ⚠️ See `uploadButton.wording`: hidden, never absent. */
+        wording: {
+            layout: 'sr-only',
+            class: '',
+        },
         icon: {
-            layout: 'h-4 w-4 shrink-0',
+            layout: 'h-5 w-5 shrink-0',
             class: '',
         },
         dialog: {
@@ -883,6 +898,23 @@ export const defaultTheme: MhTheme = {
         pickingOn: {
             layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
             class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        /*
+         * ⚠️ SQUARE AND WORDLESS, AND IT STILL HAS TO ANNOUNCE ITSELF. The trash is one glyph
+         * everybody recognises, so the label is spent on the two other buttons; what it must
+         * never lose is `aria-label`, or it is a button a screen reader calls "button".
+         */
+        trash: {
+            layout: 'inline-flex h-9 w-9 items-center justify-center rounded-md',
+            class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
+        },
+        trashOn: {
+            layout: 'inline-flex h-9 w-9 items-center justify-center rounded-md',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        trashIcon: {
+            layout: 'h-5 w-5',
+            class: '',
         },
         root: {
             layout: 'flex flex-col gap-4',

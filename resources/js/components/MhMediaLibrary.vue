@@ -10,6 +10,7 @@ import { useSelection } from '../vue/useSelection'
 import { useUpload } from '../vue/useUpload'
 import type { MhAction } from './actions'
 import MhBreadcrumb from './MhBreadcrumb.vue'
+import { GLYPH_BOX, TRASH_GLYPH } from './glyphs'
 import MhContextMenu from './MhContextMenu.vue'
 import MhDetailsDialog from './MhDetailsDialog.vue'
 import MhDropzone from './MhDropzone.vue'
@@ -105,6 +106,27 @@ function stopPicking(): void {
     selection.clear()
 }
 
+/**
+ * THE TRASH, REACHABLE — which it was not from anywhere at all.
+ *
+ * ⚠️ IT IS A PLACE, NOT A FILTER. Putting it among the kinds — beside "Images" and "Documents" —
+ * would say that a trashed image is a sort of image; it is the same file somewhere else, where
+ * the only two things you can do to it are put it back and finish the job.
+ *
+ * ⚠️ AND CROSSING OVER LETS GO OF EVERYTHING. What was ticked on one side means nothing on the
+ * other — the actions are not even the same — and a file still shown in the panel would be one
+ * the screen behind it no longer lists.
+ */
+const trashed = computed(() => browser.query.value.trashed === true)
+
+async function toggleTrash(): Promise<void> {
+    stopPicking()
+    focused.value = null
+    menu.value = { open: false, x: 0, y: 0 }
+
+    await browser.showTrashed(!trashed.value)
+}
+
 onMounted(() => {
     void browser.refresh()
     void quota.refresh()
@@ -123,13 +145,26 @@ const chosen = computed<string[]>({
  */
 const searching = computed(() => (browser.query.value.search ?? '') !== '')
 
-const emptyTitle = computed(() =>
-    searching.value ? t('library.noResults.title') : words.value.emptyTitle,
-)
+/*
+ * ⚠️ THREE EMPTINESSES, AND THEY ARE NOT THE SAME SENTENCE. "Nothing here yet" told somebody
+ * looking at an empty trash that they had never uploaded anything, and somebody who had just
+ * searched that their files were gone.
+ */
+const emptyTitle = computed(() => {
+    if (searching.value) {
+        return t('library.noResults.title')
+    }
 
-const emptyDescription = computed(() =>
-    searching.value ? t('library.noResults.description') : words.value.emptyDescription,
-)
+    return trashed.value ? t('library.trash.title') : words.value.emptyTitle
+})
+
+const emptyDescription = computed(() => {
+    if (searching.value) {
+        return t('library.noResults.description')
+    }
+
+    return trashed.value ? t('library.trash.description') : words.value.emptyDescription
+})
 
 async function open(folder: Folder | null): Promise<void> {
     /* ⚠️ THE SELECTION IS DROPPED WHEN THE FOLDER CHANGES. Carrying it across means a batch
@@ -232,12 +267,42 @@ function onFiltered(types: MediaType[]): void {
                      toolbar holding either would have to reach for the browser's state, and stop
                      being a toolbar. It offers the place, this screen fills it. -->
                 <template #start>
-                    <MhUploadButton @files="onFiles" />
+                    <!-- ⚠️ NOTHING IS ADDED TO A TRASH. Depositing a file there would mean
+                         uploading something already thrown away, and a new folder would be born
+                         deleted. Both controls were offered anyway, and both would have acted:
+                         the upload would have landed in the library behind, out of sight of the
+                         screen that accepted it. -->
+                    <MhUploadButton v-if="!trashed" @files="onFiles" />
 
                     <!-- ⚠️ IT SAYS WHICH STATE IT WILL PUT YOU IN, and looks pressed while it is
                          on. Selection mode changes what a click does everywhere on the screen;
                          a control that looks the same either way leaves clicking something and
                          seeing what happens as the only way to find out. -->
+                    <!-- ⚠️ A DOOR, NOT A FILTER. Among the kinds it would say that a trashed
+                         image is a sort of image; it is the same file somewhere else, where the
+                         only two things you can do are put it back and finish the job. -->
+                    <button
+                        type="button"
+                        :class="trashed ? cls('trashOn') : cls('trash')"
+                        :aria-pressed="trashed"
+                        :aria-label="trashed ? t('toolbar.trashLeave') : t('toolbar.trash')"
+                        :title="trashed ? t('toolbar.trashLeave') : t('toolbar.trash')"
+                        @click="toggleTrash"
+                    >
+                        <svg
+                            :class="cls('trashIcon')"
+                            :viewBox="GLYPH_BOX"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path v-for="(drawing, step) in TRASH_GLYPH" :key="step" :d="drawing" />
+                        </svg>
+                    </button>
+
                     <button
                         type="button"
                         :class="picking ? cls('pickingOn') : cls('picking')"
@@ -248,6 +313,7 @@ function onFiltered(types: MediaType[]): void {
                     </button>
 
                     <MhFolderCreator
+                        v-if="!trashed"
                         :parent="browser.folder.value"
                         :client="client"
                         @created="refreshAll"
@@ -269,6 +335,7 @@ function onFiltered(types: MediaType[]): void {
         <MhSelectionBar
             :selection="selection.asSelection()"
             :actions="actions"
+            :trashed="trashed"
             :client="client"
             @clear="selection.clear()"
             @done="refreshAll"
@@ -333,6 +400,7 @@ function onFiltered(types: MediaType[]): void {
             v-model:open="menu.open"
             :selection="acting"
             :actions="actions"
+            :trashed="trashed"
             :x="menu.x"
             :y="menu.y"
             :client="client"

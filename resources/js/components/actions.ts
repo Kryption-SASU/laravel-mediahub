@@ -17,6 +17,26 @@ import type { MhTranslator } from '../i18n/context'
  * their trade and not to a media library; a hardcoded list would leave them writing a second
  * toolbar beside ours, which is the first step towards replacing both.
  */
+/**
+ * WHERE THE SCREEN IS, WHICH DECIDES WHAT CAN BE OFFERED THERE.
+ *
+ * ⚠️ EACH OF THE TWO SIDES DROPS THE ONE ENTRY THAT MEANS NOTHING ON IT. Putting away what is
+ * already away is refused by the operation itself — re-stamping its deletion instant would
+ * attach it to this one and bring it back with the next restore. Taking back what was never
+ * thrown away changes nothing at all. Both would sit on a menu doing nothing, and a screen whose
+ * entries do nothing teaches people to stop reading them.
+ *
+ * ⚠️ DELETING FOR GOOD IS ON BOTH SIDES, and that is not an oversight: skipping the trash is a
+ * legitimate thing to ask for, and it works exactly the same from either.
+ *
+ * ⚠️ AND THE SELECTION CANNOT ANSWER THIS. It holds identifiers; whether they are in the trash is
+ * a fact about the view somebody is looking at, not about the keys they ticked.
+ */
+export interface MhActionContext {
+    /** Whether the screen is showing the trash. */
+    trashed: boolean
+}
+
 /** What a confirmation puts to somebody. */
 export interface MhConfirmation {
     title: string
@@ -33,7 +53,7 @@ export interface MhAction {
      * already trashed. An action that is always offered and sometimes fails teaches people that
      * the buttons lie.
      */
-    available?(selection: Selection): boolean
+    available?(selection: Selection, where: MhActionContext): boolean
 
     /**
      * ⚠️ THE LOOK FOLLOWS THE CONSEQUENCE, not the wording. "Empty the trash" is destructive
@@ -133,13 +153,13 @@ export function defaultActions(client: MediaHubClient, t: MhTranslator): MhActio
             label: t('actions.trash'),
             destructive: true,
             confirm: (selection) => warn(client, t, selection, 'trash'),
-            available: (selection) => !isEmpty(selection),
+            available: (selection, where) => !isEmpty(selection) && !where.trashed,
             run: (selection) => client.trash(selection),
         },
         {
             id: 'restore',
             label: t('actions.restore'),
-            available: (selection) => !isEmpty(selection),
+            available: (selection, where) => !isEmpty(selection) && where.trashed,
             run: (selection) => client.restore(selection),
         },
         {
@@ -165,6 +185,7 @@ export function useMediaActionList(
     client: MediaHubClient,
     selection: MaybeRefOrGetter<Selection>,
     extra?: MaybeRefOrGetter<MhAction[] | undefined>,
+    where?: MaybeRefOrGetter<MhActionContext>,
 ): UseMediaActionList {
     /*
      * ⚠️ READ INSIDE THE COMPUTED, NOT CAPTURED ONCE. The translator closes over the locale the
@@ -192,7 +213,12 @@ export function useMediaActionList(
     const available = computed<MhAction[]>(() => {
         const current = toValue(selection)
 
-        return all.value.filter((action) => action.available?.(current) ?? true)
+        /* ⚠️ OUTSIDE THE TRASH BY DEFAULT. A caller that says nothing is looking at a library,
+         * which is the ordinary case — and the answer has to be one of the two, since "somewhere
+         * unspecified" would make every action either always shown or never. */
+        const context = toValue(where) ?? { trashed: false }
+
+        return all.value.filter((action) => action.available?.(current, context) ?? true)
     })
 
     return { all, available }

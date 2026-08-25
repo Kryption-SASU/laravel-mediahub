@@ -83,7 +83,11 @@ function onChosen(event: Event): void {
                 </svg>
             </slot>
 
-            {{ words.label }}
+            <!-- ⚠️ HIDDEN BY THE THEME, NOT REMOVED FROM THE MARKUP. An icon-only control still
+                 has to have a name, and the surest name is real text: taken out, the label would
+                 have to be restated in an `aria-label`, in a second place, in every language.
+                 `sr-only` keeps one source and shows a host how to bring the word back. -->
+            <span :class="cls('wording')">{{ words.label }}</span>
         </label>
 
         <input

@@ -41,6 +41,14 @@ export const FOLDER_ADD_GLYPH: readonly string[] = [
  */
 export const MENU_GLYPH: readonly string[] = ['M12 6h.01', 'M12 12h.01', 'M12 18h.01']
 
+export const TRASH_GLYPH: readonly string[] = [
+    'M4 7h16',
+    'M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7',
+    'M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7',
+    'M10 11v6',
+    'M14 11v6',
+]
+
 export const CHECK_GLYPH: readonly string[] = ['M5 12.5l4.5 4.5L19 7.5']
 
 export const COPY_GLYPH: readonly string[] = [

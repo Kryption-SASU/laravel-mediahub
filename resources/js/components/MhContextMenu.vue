@@ -30,6 +30,13 @@ const props = withDefaults(
         y?: number
         actions?: MhAction[]
         label?: string
+        /**
+         * ⚠️ WHERE THE SCREEN IS, so that what is offered makes sense there. "Restore" on a file
+         * nobody threw away fails, and a screen whose buttons fail teaches people to stop reading
+         * them. The selection cannot answer this: it holds identifiers, and whether they are in
+         * the trash is a fact about the view.
+         */
+        trashed?: boolean
         client?: MediaHubClient
         ui?: MhComponentOverride
     }>(),
@@ -38,6 +45,7 @@ const props = withDefaults(
         y: 0,
         actions: undefined,
         label: undefined,
+        trashed: false,
         client: undefined,
         ui: undefined,
     },
@@ -63,6 +71,7 @@ const { available } = useMediaActionList(
     api,
     () => props.selection,
     () => props.actions,
+    () => ({ trashed: props.trashed }),
 )
 
 const runner = useActionRunner(
