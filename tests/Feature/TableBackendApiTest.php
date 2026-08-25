@@ -374,6 +374,84 @@ class TableBackendApiTest extends TestCase
         $this->assertSame(1, DB::table('mediahub_conversions')->count());
     }
 
+    // ── What a selection carries, before anything is done to it ──────────────
+
+    /**
+     * ⚠️ A FOLDER IS NEVER JUST A FOLDER. Trashing and purging take the whole subtree — that is
+     * deliberate, and a folder deleted while its files stay visible would leave rows attached to
+     * an absent parent. But it means "delete 1 folder" can mean "delete 1 folder and four hundred
+     * files", and nothing could say so before the fact.
+     */
+    public function test_it_reports_what_a_folder_carries_all_the_way_down(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $root = $this->folder('Clients');
+        $child = $this->folder('Acme', $root);
+        $grandchild = $this->folder('Contracts', $child);
+
+        $this->media(['folder_id' => $child->getKey()]);
+        $this->media(['folder_id' => $grandchild->getKey()]);
+
+        $body = $this->postJson('/media/contents', ['folders' => [$root->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        /* ⚠️ THE WHOLE BRANCH: the folder itself, its child, its grandchild. */
+        $this->assertSame(3, $body['folders']);
+        $this->assertSame(2, $body['media']);
+    }
+
+    /** ⚠️ AND AN EMPTY BRANCH SAYS SO, rather than leaving the caller to guess from a zero. */
+    public function test_it_reports_a_folder_that_carries_nothing(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+
+        $body = $this->postJson('/media/contents', ['folders' => [$folder->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $body['folders']);
+        $this->assertSame(0, $body['media']);
+    }
+
+    /**
+     * ⚠️ A FILE TICKED DIRECTLY THAT ALSO SITS INSIDE A TICKED FOLDER IS ONE FILE. Added rather
+     * than unioned, the confirmation would name more than the action goes on to touch — and the
+     * one number somebody reads before destroying something would be wrong upwards.
+     */
+    public function test_it_counts_a_file_once_even_when_it_is_reached_twice(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+        $media = $this->media(['folder_id' => $folder->getKey()]);
+
+        $body = $this->postJson('/media/contents', [
+            'folders' => [$folder->getRouteKey()],
+            'media' => [$media->getRouteKey()],
+        ])->assertOk()->json('data');
+
+        $this->assertSame(1, $body['media']);
+    }
+
+    /** ⚠️ WHAT IS ALREADY IN THE TRASH COUNTS, because purging and restoring both act on it. */
+    public function test_it_counts_what_is_already_in_the_trash(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+        $this->media(['folder_id' => $folder->getKey()])->delete();
+
+        $body = $this->postJson('/media/contents', ['folders' => [$folder->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $body['media']);
+    }
+
     // ── Who owns what the API creates ────────────────────────────────────────
 
     /**
