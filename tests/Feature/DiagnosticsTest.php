@@ -97,6 +97,69 @@ class DiagnosticsTest extends TestCase
         $this->assertNotEmpty($body['checks']);
     }
 
+    // ── Every word on the screen ─────────────────────────────────────────────
+
+    /**
+     * ⚠️ A MISSING TRANSLATION IS NOT AN ERROR IN LARAVEL, IT IS THE KEY. So a report whose
+     * catalogue is shaped wrong renders perfectly and shows
+     * `mediahub::diagnostics.uploads.post_max_size.title` to somebody trying to configure a
+     * server — which is what shipped, and what a real screen caught.
+     *
+     * ⚠️ AND THE BENCH THAT SHOULD HAVE CAUGHT IT ASSERTED THE KEY BY ACCIDENT. It looked for
+     * the directive's name inside the title, and the untranslated key contains it: the
+     * assertion passed on the failure it was written to prevent. Checking that nothing still
+     * looks like a key is the assertion that cannot be satisfied by one.
+     *
+     * ⚠️ IT WALKS THE WHOLE REPORT rather than a chosen finding, so a check added later is
+     * covered on the day it is written.
+     */
+    public function test_nothing_in_the_report_is_still_a_key(): void
+    {
+        /* Every level is made to appear at once, so the wording of each is looked at. */
+        $this->app['config']->set('mediahub.uploads.max_size', 100 * 1024 * 1024);
+        $this->app['config']->set('mediahub.archives.max_bytes', 8 * 1024 * 1024 * 1024);
+
+        foreach ($this->report()['checks'] as $check) {
+            foreach (['title', 'detail', 'recommendation'] as $part) {
+                $this->assertStringNotContainsString(
+                    'mediahub::',
+                    (string) $check[$part],
+                    $check['id'].'.'.$part.' was never translated.',
+                );
+            }
+        }
+    }
+
+    /** ⚠️ AND IN THE OTHER LANGUAGE TOO, since a catalogue can be right in one and shaped wrong
+     * in the next. */
+    public function test_nothing_in_the_french_report_is_still_a_key(): void
+    {
+        $this->app->setLocale('fr');
+        $this->app['config']->set('mediahub.uploads.max_size', 100 * 1024 * 1024);
+
+        foreach ($this->report()['checks'] as $check) {
+            $this->assertStringNotContainsString('mediahub::', (string) $check['title']);
+            $this->assertStringNotContainsString('mediahub::', (string) $check['detail']);
+        }
+    }
+
+    /** ⚠️ NOR IS A PLACEHOLDER LEFT STANDING. `:allowed` on the screen means the sentence was
+     * found and the value was not. */
+    public function test_no_placeholder_survives_into_the_report(): void
+    {
+        $this->app['config']->set('mediahub.uploads.max_size', 100 * 1024 * 1024);
+
+        foreach ($this->report()['checks'] as $check) {
+            foreach (['title', 'detail', 'recommendation'] as $part) {
+                $this->assertDoesNotMatchRegularExpression(
+                    '/:[a-z_]+\b/',
+                    (string) $check[$part],
+                    $check['id'].'.'.$part.' still carries a placeholder.',
+                );
+            }
+        }
+    }
+
     // ── Uploads ──────────────────────────────────────────────────────────────
 
     /**
@@ -113,10 +176,19 @@ class DiagnosticsTest extends TestCase
             $check = $this->check('uploads.'.$directive);
 
             $this->assertSame(DiagnoseSetup::FAILING, $check['level']);
+
+            /*
+             * ⚠️ A SENTENCE, NOT MERELY THE DIRECTIVE'S NAME. Looking for `post_max_size` alone
+             * was satisfied by the untranslated key — which is literally
+             * `mediahub::diagnostics.uploads.post_max_size.title` — so this bench passed on the
+             * exact failure it existed to prevent, and the report shipped showing keys.
+             */
             $this->assertStringContainsString($directive, $check['title']);
+            $this->assertStringContainsString('PHP', $check['title']);
 
             /* ⚠️ AND IT SAYS WHAT TO DO, which is the half that asks somebody to act. */
             $this->assertStringContainsString($directive, (string) $check['recommendation']);
+            $this->assertStringContainsString('php.ini', (string) $check['recommendation']);
         }
     }
 
