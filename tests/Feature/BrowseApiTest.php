@@ -336,6 +336,75 @@ class BrowseApiTest extends TestCase
         );
     }
 
+    /**
+     * ⚠️ THE TOP OF THE TRASH LISTED NOTHING AT ALL ON THIS BACKEND, and the bench that was
+     * supposed to prove it ran on the other one. The rule — "what was thrown away, minus what is
+     * reached by walking into a thrown-away parent" — was written as `parent_id NOT IN (…)`,
+     * which is UNKNOWN rather than TRUE for a folder at the root, because this schema writes
+     * that root as NULL. SQL discards UNKNOWN, so the trash was empty of folders and a branch
+     * thrown away could not be put back. The preset that writes the root as 0 answered
+     * correctly throughout: 0 is a value, and a value compares.
+     */
+    public function test_a_folder_thrown_away_at_the_root_is_at_the_top_of_the_trash(): void
+    {
+        $folder = $this->folder('Archive');
+        $folder->delete();
+
+        $listed = $this->getJson('/media?trashed=1')->assertOk()->json('data.folders');
+
+        $this->assertSame([$folder->uuid], array_column($listed, 'id'));
+    }
+
+    /**
+     * ⚠️ AND THE OTHER HALF OF THE SAME RULE STILL HOLDS. A folder whose parent went to the
+     * trash with it belongs inside that parent, not beside it; listing both at the top would
+     * show the same branch twice and make "restore" ambiguous. Without this, the fix above could
+     * have been "list everything trashed" — which passes the test above and loses the nesting.
+     */
+    public function test_a_folder_inside_a_trashed_folder_is_not_at_the_top_of_the_trash(): void
+    {
+        $parent = $this->folder('Archive');
+        $child = $this->folder('Invoices', $parent);
+        $parent->delete();
+        $child->delete();
+
+        $listed = $this->getJson('/media?trashed=1')->assertOk()->json('data.folders');
+
+        $this->assertSame([$parent->uuid], array_column($listed, 'id'));
+
+        $inside = $this->getJson('/media?trashed=1&folder='.$parent->uuid)
+            ->assertOk()
+            ->json('data.folders');
+
+        $this->assertSame([$child->uuid], array_column($inside, 'id'));
+    }
+
+    /**
+     * ⚠️ AND THE TWO CONDITIONS ARE ONE GROUP, WHICH IS NOT A MATTER OF STYLE. Written flat,
+     * the `OR` binds against everything before it — the "only what is deleted" filter
+     * included — so `deleted_at IS NOT NULL AND parent_id IS NULL OR parent_id NOT IN (…)`
+     * reads as two alternatives, and the second one is true for any LIVE folder that sits under
+     * a live parent. The trash then lists folders nobody threw away, offering to restore what
+     * was never gone.
+     *
+     * ⚠️ THE DECOR IS WHAT MAKES THIS BENCH WORK, AND IT TOOK A MUTATION TO FIND IT. A live
+     * folder at the ROOT is excluded either way — its NULL parent makes the loose condition
+     * UNKNOWN too — so a decor of root folders certifies the grouping while proving nothing
+     * about it. It takes a live folder with a live parent.
+     */
+    public function test_the_trash_lists_nothing_that_is_still_in_the_library(): void
+    {
+        $parent = $this->folder('Archive');
+        $this->folder('Invoices', $parent);
+
+        $thrown = $this->folder('Old');
+        $thrown->delete();
+
+        $listed = $this->getJson('/media?trashed=1')->assertOk()->json('data.folders');
+
+        $this->assertSame([$thrown->uuid], array_column($listed, 'id'));
+    }
+
     // ── The quota ────────────────────────────────────────────────────────────
 
     public function test_an_unlimited_quota_says_so(): void
