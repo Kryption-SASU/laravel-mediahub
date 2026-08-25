@@ -29,16 +29,23 @@ const en: MhMessages = {
     'actions.trash': 'Move to trash',
     'actions.trash.confirmTitle': 'Move to the trash?',
     'actions.trash.confirmMessage': 'They can be restored from the trash afterwards.',
+    /* ⚠️ COUNTED, SO PLURALISED — and the folders are not counted here, the files are: it is
+       the files somebody did not tick that they need to be told about. */
+    'actions.trash.confirmInside':
+        '{count} file inside will go with them, and can be restored from the trash afterwards.|{count} files inside will go with them, and can be restored from the trash afterwards.',
     'actions.restore': 'Restore',
     'actions.purge': 'Delete permanently',
     'actions.purge.confirmTitle': 'Delete permanently?',
     'actions.purge.confirmMessage':
         'This cannot be undone, and the files are removed from the storage.',
+    'actions.purge.confirmInside':
+        '{count} file inside will be deleted too. This cannot be undone, and the files are removed from the storage.|{count} files inside will be deleted too. This cannot be undone, and the files are removed from the storage.',
 
     'breadcrumb.label': 'Breadcrumb',
     'breadcrumb.root': 'All files',
 
     'details.alt': 'Alternative text',
+    'details.close': 'Close',
     'details.copied': 'Copied',
     'details.copy': 'Copy',
     'details.created': 'Uploaded at',
@@ -107,13 +114,16 @@ const en: MhMessages = {
     'quota.label': 'Storage used',
     'quota.unlimited': 'Unlimited',
 
+    'selection.chosen': 'Chosen',
     'selection.clear': 'Clear',
     'selection.count': '{count} selected|{count} selected',
 
     'skeleton.loading': 'Loading',
 
     'toolbar.allTypes': 'Everything',
+    'toolbar.done': 'Done',
     'toolbar.search': 'Search',
+    'toolbar.select': 'Select',
     'toolbar.sort': 'Sort by',
     'toolbar.sort.created_at': 'Date added',
     'toolbar.sort.name': 'Name',
@@ -137,16 +147,21 @@ const fr: MhMessages = {
     'actions.trash': 'Mettre à la corbeille',
     'actions.trash.confirmTitle': 'Mettre à la corbeille ?',
     'actions.trash.confirmMessage': 'Ces fichiers pourront être restaurés depuis la corbeille.',
+    'actions.trash.confirmInside':
+        '{count} fichier à l’intérieur partira avec, et pourra être restauré depuis la corbeille.|{count} fichiers à l’intérieur partiront avec, et pourront être restaurés depuis la corbeille.',
     'actions.restore': 'Restaurer',
     'actions.purge': 'Supprimer définitivement',
     'actions.purge.confirmTitle': 'Supprimer définitivement ?',
     'actions.purge.confirmMessage':
         'Cette action est irréversible, et les fichiers sont retirés du stockage.',
+    'actions.purge.confirmInside':
+        '{count} fichier à l’intérieur sera supprimé aussi. Cette action est irréversible, et les fichiers sont retirés du stockage.|{count} fichiers à l’intérieur seront supprimés aussi. Cette action est irréversible, et les fichiers sont retirés du stockage.',
 
     'breadcrumb.label': "Fil d'ariane",
     'breadcrumb.root': 'Tous les fichiers',
 
     'details.alt': 'Texte alternatif',
+    'details.close': 'Fermer',
     'details.copied': 'Copié',
     'details.copy': 'Copier',
     'details.created': 'Ajouté le',
@@ -214,13 +229,16 @@ const fr: MhMessages = {
     'quota.label': 'Espace utilisé',
     'quota.unlimited': 'Illimité',
 
+    'selection.chosen': 'Choisi',
     'selection.clear': 'Tout désélectionner',
     'selection.count': '{count} sélectionné|{count} sélectionnés',
 
     'skeleton.loading': 'Chargement',
 
     'toolbar.allTypes': 'Tout',
+    'toolbar.done': 'Terminer',
     'toolbar.search': 'Rechercher',
+    'toolbar.select': 'Sélectionner',
     'toolbar.sort': 'Trier par',
     'toolbar.sort.created_at': "Date d'ajout",
     'toolbar.sort.name': 'Nom',

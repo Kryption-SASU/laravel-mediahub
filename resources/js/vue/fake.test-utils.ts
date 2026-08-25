@@ -14,6 +14,7 @@ export interface FakeClient extends MediaHubClient {
     answerBrowse(page: Partial<BrowsePage>): void
     answerQuota(quota: Quota): void
     failWith(error: MediaHubError | null): void
+    answerContents(contents: { media: number; folders: number }): void
 }
 
 export function media(id: string, over: Partial<Media> = {}): Media {
@@ -69,6 +70,7 @@ export function fakeClient(): FakeClient {
     let page: BrowsePage = emptyPage
     let quota: Quota = { limit: null, used: 0, remaining: null, unlimited: true }
     let failure: MediaHubError | null = null
+    let contents = { media: 0, folders: 0 }
 
     function record<T>(method: string, args: unknown[], value: T): Promise<T> {
         calls.push({ method, args })
@@ -91,6 +93,12 @@ export function fakeClient(): FakeClient {
             failure = error
         },
 
+        /* ⚠️ WHAT A SELECTION CARRIES IS THE SERVER'S ANSWER, so a bench that wants to exercise a
+         * confirmation naming four hundred files says so here rather than counting anything. */
+        answerContents(next: { media: number; folders: number }): void {
+            contents = next
+        },
+
         url: (path: string) => (path === '' ? '/media' : `/media/${path}`),
         headers: () => ({ Accept: 'application/json' }),
 
@@ -103,6 +111,7 @@ export function fakeClient(): FakeClient {
         trash: (selection) => record('trash', [selection], { count: 1 }),
         restore: (selection) => record('restore', [selection], { count: 1 }),
         purge: (selection) => record('purge', [selection], { count: 1 }),
+        contents: (selection) => record('contents', [selection], contents),
         emptyTrash: () => record('emptyTrash', [], { count: 2 }),
         quota: () => record('quota', [], quota),
         archiveRequest: (selection, name) => {

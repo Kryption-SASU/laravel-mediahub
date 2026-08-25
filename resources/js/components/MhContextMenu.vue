@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
@@ -78,17 +78,76 @@ const cursor = ref(0)
  * appears without taking focus leaves a keyboard user pressing Tab through the whole page to
  * reach something that opened under their hand.
  */
+/**
+ * DISMISSING IT BY CLICKING SOMEWHERE ELSE — which is the only way most people ever close a menu.
+ *
+ * ⚠️ WITHOUT THIS THERE IS NO POINTER ROUTE OUT AT ALL. Escape closes it and choosing an action
+ * closes it, but somebody who opened the menu by mistake and clicked away was left with it
+ * floating over the screen for as long as the page lived. That reads as a menu that never closes,
+ * which is exactly how it was reported.
+ *
+ * ⚠️ `pointerdown` RATHER THAN `click`, and it matters twice. A menu that waits for `click` stays
+ * up through a drag that started outside it; and a right click on another tile fires `pointerdown`
+ * before `contextmenu`, so the menu closes and reopens where the pointer now is instead of
+ * ignoring the second request.
+ */
+function onPointerDown(event: Event): void {
+    const target = event.target
+
+    /* ⚠️ INSIDE THE MENU IS NOT OUTSIDE IT. Closing on the way down would take the box away
+     * before the `click` that chooses an action ever reached it. */
+    if (target instanceof Node && root.value?.contains(target) === true) {
+        return
+    }
+
+    close()
+}
+
+function listen(on: boolean): void {
+    if (typeof document === 'undefined') {
+        return
+    }
+
+    const method = on ? 'addEventListener' : 'removeEventListener'
+
+    document[method]('pointerdown', onPointerDown)
+}
+
+/*
+ * ⚠️ THE LISTENER IS RELEASED WITH THE COMPONENT. A screen opened and closed all day would
+ * otherwise leave one behind on the document for every menu ever mounted, each holding its own
+ * component alive through the closure.
+ */
+onBeforeUnmount(() => listen(false))
+
 watch(
     () => props.open,
     async (open) => {
         if (!open) {
+            listen(false)
+
             return
         }
 
         cursor.value = 0
         await nextTick()
         focusItem()
+
+        /*
+         * ⚠️ ATTACHED AFTER THE RENDER, NOT DURING IT. The very gesture that opens the menu is
+         * still being dispatched: a listener added synchronously would catch the tail of it and
+         * close the menu in the same breath as opening it.
+         */
+        listen(true)
     },
+    /*
+     * ⚠️ `immediate`, BECAUSE A MENU CAN BE MOUNTED ALREADY OPEN. Without it such a menu takes no
+     * focus and attaches nothing: it cannot be driven from a keyboard and cannot be dismissed by
+     * clicking away — the two things this watcher exists to provide. Our own screen mounts it
+     * closed and toggles, so nothing here ever showed it; a host rendering it open on demand
+     * would have found a menu that only half works.
+     */
+    { immediate: true },
 )
 
 function focusItem(): void {
@@ -161,8 +220,8 @@ function onKeydown(event: KeyboardEvent): void {
 
     <MhConfirmDialog
         :open="runner.pending.value !== null"
-        :title="runner.pending.value?.confirm?.title ?? ''"
-        :message="runner.pending.value?.confirm?.message"
+        :title="runner.asking.value?.title ?? ''"
+        :message="runner.asking.value?.message"
         :destructive="runner.pending.value?.destructive ?? false"
         @confirm="runner.confirm()"
         @cancel="runner.cancel()"

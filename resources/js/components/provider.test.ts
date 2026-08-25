@@ -109,6 +109,7 @@ describe('the public surface of the components', () => {
             'MhBreadcrumb',
             'MhConfirmDialog',
             'MhContextMenu',
+            'MhDetailsDialog',
             'MhDetailsPanel',
             'MhDropzone',
             'MhEmptyState',

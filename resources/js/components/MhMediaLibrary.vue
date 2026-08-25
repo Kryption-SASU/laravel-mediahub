@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import type { Folder, Media, MediaHubClient, MediaSort, MediaType } from '../client'
+import type { Folder, Media, MediaHubClient, MediaSort, MediaType, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
@@ -11,7 +11,7 @@ import { useUpload } from '../vue/useUpload'
 import type { MhAction } from './actions'
 import MhBreadcrumb from './MhBreadcrumb.vue'
 import MhContextMenu from './MhContextMenu.vue'
-import MhDetailsPanel from './MhDetailsPanel.vue'
+import MhDetailsDialog from './MhDetailsDialog.vue'
 import MhDropzone from './MhDropzone.vue'
 import MhEmptyState from './MhEmptyState.vue'
 import MhFolderCreator from './MhFolderCreator.vue'
@@ -82,6 +82,28 @@ const upload = useUpload(props.client)
 
 const focused = ref<Media | null>(null)
 const menu = ref({ open: false, x: 0, y: 0 })
+
+/**
+ * CHOOSING IS A MODE, AND THE SCREEN DOES ONE THING AT A TIME.
+ *
+ * ⚠️ A CLICK USED TO MEAN BOTH "show me this" AND "count this in", which is how every file
+ * somebody merely looked at ended up in the next batch action — one whose confirmation names a
+ * count rather than the files. Splitting them is what lets a tile answer for itself: browsing,
+ * the click opens; choosing, it ticks, and nothing else on the tile does anything at all.
+ */
+const picking = ref(false)
+
+/**
+ * ⚠️ THE MENU ACTS ON WHAT IT WAS OPENED ON, NOT ON THE SELECTION. The two used to be the same
+ * list, so right-clicking a file quietly ticked it and raised the batch bar — a bar that now
+ * belongs to selection mode alone. This holds the one thing the menu was asked about.
+ */
+const acting = ref<Selection>({})
+
+function stopPicking(): void {
+    picking.value = false
+    selection.clear()
+}
 
 onMounted(() => {
     void browser.refresh()
@@ -158,16 +180,27 @@ watch(
     },
 )
 
-function onContextMenu(event: MouseEvent): void {
-    /* ⚠️ ONLY WHERE THERE IS SOMETHING TO ACT ON. A menu offering nothing, opened by a right
-     * click on the background, replaces the browser's own menu with an empty box. */
-    if (selection.empty.value) {
-        return
-    }
+/**
+ * THE ACTIONS FOR ONE THING, ASKED FOR ON THAT THING.
+ *
+ * ⚠️ WHAT IS ALREADY TICKED IS KEPT, AND ONLY REPLACED WHEN THE ITEM IS NOT PART OF IT. Asking
+ * for the menu on one of five selected files means "do this to the five"; asking for it on a
+ * sixth means "do it to that one". Replacing the selection every time would silently drop four
+ * files from an action whose confirmation names a count rather than the files.
+ */
+function openMenu(on: { media?: Media; folder?: Folder }, event: MouseEvent): void {
+    /*
+     * ⚠️ NEITHER THE PANEL NOR THE SELECTION IS TOUCHED HERE. Asking what can be done to a file
+     * is not asking to look at it, and it is not asking to add it to a batch: a right click that
+     * did either would answer a question nobody put — and the second would raise a bar that says
+     * "3 selected" over a screen where somebody ticked nothing.
+     */
+    acting.value = on.media === undefined ? { folders: [on.folder!.id] } : { media: [on.media.id] }
 
-    event.preventDefault()
     menu.value = { open: true, x: event.clientX, y: event.clientY }
 }
+
+
 
 async function onFiles(files: File[]): Promise<void> {
     upload.add(files, { folder: browser.folder.value?.id ?? null })
@@ -183,7 +216,7 @@ function onFiltered(types: MediaType[]): void {
 </script>
 
 <template>
-    <section :class="cls('root')" @contextmenu="onContextMenu">
+    <section :class="cls('root')">
         <header :class="cls('header')">
             <MhToolbar
                 :search="browser.query.value.search ?? null"
@@ -201,6 +234,19 @@ function onFiltered(types: MediaType[]): void {
                 <template #start>
                     <MhUploadButton @files="onFiles" />
 
+                    <!-- ⚠️ IT SAYS WHICH STATE IT WILL PUT YOU IN, and looks pressed while it is
+                         on. Selection mode changes what a click does everywhere on the screen;
+                         a control that looks the same either way leaves clicking something and
+                         seeing what happens as the only way to find out. -->
+                    <button
+                        type="button"
+                        :class="picking ? cls('pickingOn') : cls('picking')"
+                        :aria-pressed="picking"
+                        @click="picking ? stopPicking() : (picking = true)"
+                    >
+                        {{ picking ? t('toolbar.done') : t('toolbar.select') }}
+                    </button>
+
                     <MhFolderCreator
                         :parent="browser.folder.value"
                         :client="client"
@@ -216,6 +262,10 @@ function onFiltered(types: MediaType[]): void {
             </div>
         </header>
 
+        <!-- ⚠️ IT FOLLOWS THE SELECTION, AND THE SELECTION ONLY EXISTS WHILE CHOOSING. A second
+             `v-if` on the mode was there at first and proved to be redundant: nothing outside
+             selection mode ticks anything, so the two guards each hid the other's absence and
+             removing either changed nothing anybody could see. One rule, held in one place. -->
         <MhSelectionBar
             :selection="selection.asSelection()"
             :actions="actions"
@@ -238,7 +288,14 @@ function onFiltered(types: MediaType[]): void {
                      browser, taking the page with it. The keyboard route is the button in the
                      toolbar, and it is not optional. -->
                 <MhDropzone @files="onFiles">
-                    <MhFolderList :folders="browser.page.value?.folders ?? []" @open="open" />
+                    <MhFolderList
+                        :folders="browser.page.value?.folders ?? []"
+                        :picking="picking"
+                        :selected="selection.folders.value"
+                        @open="open"
+                        @toggle="selection.toggle('folder', $event.id)"
+                        @menu="(folder, where) => openMenu({ folder }, where)"
+                    />
 
                     <MhItemGrid
                         v-model:selected="chosen"
@@ -246,7 +303,10 @@ function onFiltered(types: MediaType[]): void {
                         multiple
                         :loading="browser.loading.value"
                         :error="browser.error.value"
+                        :choosing="picking"
+                        @current="focused = $event"
                         @activate="focused = $event; emit('open', $event)"
+                        @menu="(chosen, where) => openMenu({ media: chosen }, where)"
                     >
                         <template #empty>
                             <MhEmptyState :title="emptyTitle" :description="emptyDescription" />
@@ -255,18 +315,23 @@ function onFiltered(types: MediaType[]): void {
                 </MhDropzone>
             </div>
 
-            <MhDetailsPanel
-                :media="focused"
-                :client="client"
-                :selectable="selectable"
-                @updated="refreshAll"
-                @use="emit('use', $event)"
-            />
         </div>
+
+        <!-- ⚠️ A WINDOW RATHER THAN A COLUMN. The panel is the same component either way; what
+             changes is that the grid keeps the width of the screen, and looking at one file no
+             longer costs every other file a fifth of the room they had. -->
+        <MhDetailsDialog
+            :media="focused"
+            :client="client"
+            :selectable="selectable"
+            @updated="refreshAll"
+            @use="emit('use', $event)"
+            @close="focused = null"
+        />
 
         <MhContextMenu
             v-model:open="menu.open"
-            :selection="selection.asSelection()"
+            :selection="acting"
             :actions="actions"
             :x="menu.x"
             :y="menu.y"

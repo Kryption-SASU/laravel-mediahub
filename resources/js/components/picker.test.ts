@@ -23,6 +23,15 @@ async function settle(): Promise<void> {
     await nextTick()
 }
 
+/**
+ * ⚠️ THE PICKER'S OWN BUTTONS, BY THEIR WORDING. Every tile carries a menu button now, so
+ * an index into `findAll('button')` reaches one of those instead — and the failure surfaces
+ * as a promise that never settles rather than as a selector that moved.
+ */
+function button(wrapper: ReturnType<typeof mount>, wording: string) {
+    return wrapper.findAll('button').filter((candidate) => candidate.text() === wording)[0]
+}
+
 describe('the picker as a promise', () => {
     /**
      * ⚠️ THE LISTING IS FETCHED WHEN IT OPENS, NOT WHEN IT MOUNTS. A picker sits beside a form on
@@ -51,7 +60,7 @@ describe('the picker as a promise', () => {
         await settle()
 
         await wrapper.findAll('[role="option"]')[0]?.trigger('click')
-        await wrapper.findAll('button')[1]?.trigger('click')
+        await button(wrapper, 'Choose')?.trigger('click')
 
         await expect(chosen).resolves.toHaveLength(1)
     })
@@ -67,7 +76,7 @@ describe('the picker as a promise', () => {
         const chosen = instance.pick()
         await settle()
 
-        await wrapper.findAll('button')[0]?.trigger('click')
+        await button(wrapper, 'Cancel')?.trigger('click')
 
         await expect(chosen).resolves.toEqual([])
     })
@@ -94,7 +103,7 @@ describe('the picker as a promise', () => {
         void instance.pick()
         await settle()
 
-        expect(wrapper.findAll('button')[1]?.attributes('disabled')).toBeDefined()
+        expect(button(wrapper, 'Choose')?.attributes('disabled')).toBeDefined()
     })
 
     it('opens an item straight into the answer', async () => {
@@ -116,7 +125,7 @@ describe('the picker as a promise', () => {
 
         await wrapper.findAll('[role="option"]')[0]?.trigger('click')
         await wrapper.findAll('[role="option"]')[1]?.trigger('click')
-        await wrapper.findAll('button')[1]?.trigger('click')
+        await button(wrapper, 'Choose')?.trigger('click')
 
         await expect(chosen).resolves.toHaveLength(2)
     })
@@ -146,7 +155,7 @@ describe('the picker as a promise', () => {
         const first = instance.pick()
         await settle()
         await wrapper.findAll('[role="option"]')[0]?.trigger('click')
-        await wrapper.findAll('button')[0]?.trigger('click')
+        await button(wrapper, 'Cancel')?.trigger('click')
         await first
 
         void instance.pick()

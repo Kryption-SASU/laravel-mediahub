@@ -135,6 +135,19 @@ export interface FolderChanges {
 }
 
 /** What a batch operation answers. */
+/**
+ * WHAT A SELECTION CARRIES, all the way down.
+ *
+ * ⚠️ THESE ARE THE NUMBERS THE ACTION WILL TOUCH, not the ones somebody ticked. Trashing a folder
+ * takes its whole subtree — that is the right behaviour, and it means "1 folder" can mean four
+ * hundred files. A confirmation built on the ticked count would reassure somebody about a figure
+ * the operation never uses.
+ */
+export interface SelectionContents {
+    media: number
+    folders: number
+}
+
 export interface AffectedCount {
     count: number
 }

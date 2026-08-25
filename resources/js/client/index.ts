@@ -28,6 +28,7 @@ export { MEDIA_TYPES } from './types'
 
 export type {
     AffectedCount,
+    SelectionContents,
     BrowsePage,
     BrowseQuery,
     Folder,
