@@ -61,8 +61,12 @@ final class BrowseController
          * Every row this filter looks at is trashed, so that last condition is false for all of
          * them and the whole `exists` never matches. It returns an empty trash, with no error.
          *
-         * ⚠️ AND ONE CONDITION COVERS BOTH CASES. The root is written as a value no key ever
-         * takes, so a folder at the root is never "inside a trashed folder" either.
+         * ⚠️ AND "AT THE ROOT" HAS TO BE SPELLED OUT, RATHER THAN LEFT TO THE `NOT IN`. On a
+         * schema that writes the root as NULL — which is this package's own — `parent_id NOT IN
+         * (…)` is UNKNOWN for those rows, not TRUE, so SQL discards every one of them: the top
+         * of the trash listed nothing at all, and a folder thrown away at the root was gone from
+         * the only screen meant to show it. The preset that writes the root as 0 hid this for as
+         * long as it was the only one under test, because 0 is a value and a value compares.
          */
         $inTheTrash = $query->trashed
             ? MediaFolder::onlyTrashed()->pluck((new MediaFolder())->getKeyName())->all()
@@ -76,7 +80,11 @@ final class BrowseController
                     ->onlyTrashed()
                     ->when(
                         $folder === null,
-                        fn ($roots) => $roots->whereNotIn(MediaFolder::column('parent_id'), $inTheTrash),
+                        fn ($roots) => $roots->where(
+                            fn ($nested) => $nested
+                                ->atParent('parent_id', null)
+                                ->orWhereNotIn(MediaFolder::column('parent_id'), $inTheTrash),
+                        ),
                         fn ($inside) => $inside->atParent('parent_id', $folder?->getKey()),
                     ),
                 fn ($builder) => $builder->atParent('parent_id', $folder?->getKey()),
