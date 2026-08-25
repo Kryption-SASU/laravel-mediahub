@@ -273,6 +273,115 @@ class BrowseApiTest extends TestCase
         $this->getJson('/media?search=I%25e')->assertOk()->assertJsonCount(0, 'data.media');
     }
 
+    /**
+     * ⚠️ A SEARCH LOOKS THROUGH THE WHOLE LIBRARY, NOT THE FOLDER IN FRONT OF YOU. Kept inside
+     * the level, a term typed at the root found only what happened to be lying at the root — and
+     * the files anybody goes looking for are the ones that were filed away. The search answered
+     * "nothing" for everything tidy, which reads as the file being gone.
+     */
+    public function test_a_search_looks_through_the_whole_library(): void
+    {
+        $archive = $this->folder('Archive');
+        $filed = $this->media(['name' => 'July invoice', 'folder_id' => $archive->getKey()]);
+        $this->media(['name' => 'Annual report']);
+
+        $found = $this->getJson('/media?search=invoice')->assertOk()->json('data.media');
+
+        $this->assertSame([$filed->uuid], array_column($found, 'id'));
+    }
+
+    /**
+     * ⚠️ AND FROM INSIDE A FOLDER JUST THE SAME. Somebody standing in one folder searching for a
+     * name is looking for the file they cannot see; answering only with what is already on
+     * screen is answering with what they did not ask for.
+     */
+    public function test_a_search_made_inside_a_folder_still_looks_outside_it(): void
+    {
+        $here = $this->folder('Here');
+        $elsewhere = $this->folder('Elsewhere');
+        $wanted = $this->media(['name' => 'Contract', 'folder_id' => $elsewhere->getKey()]);
+
+        $found = $this->getJson('/media?folder='.$here->uuid.'&search=contract')
+            ->assertOk()
+            ->json('data.media');
+
+        $this->assertSame([$wanted->uuid], array_column($found, 'id'));
+    }
+
+    /**
+     * ⚠️ THE FOLDERS OBEY THE TERM TOO. Left unfiltered they were the one half of the listing
+     * the search did not reach: a level holding twelve folders returned all twelve ahead of the
+     * results, and with a page counting a folder as an item they took the room the matches were
+     * supposed to have.
+     */
+    public function test_the_folders_obey_the_search_too(): void
+    {
+        $wanted = $this->folder('Invoices');
+        $this->folder('Reports');
+
+        $found = $this->getJson('/media?search=invoi')->assertOk()->json('data.folders');
+
+        $this->assertSame([$wanted->uuid], array_column($found, 'id'));
+    }
+
+    /** ⚠️ WHEREVER IT SITS: the folder somebody is trying to find again is not the one in front
+     * of them, so the nesting is no more a boundary for a folder than it is for a file. */
+    public function test_a_folder_is_found_however_deep_it_sits(): void
+    {
+        $archive = $this->folder('Archive');
+        $year = $this->folder('2024', $archive);
+        $wanted = $this->folder('Invoices', $year);
+
+        $found = $this->getJson('/media?search=invoi')->assertOk()->json('data.folders');
+
+        $this->assertSame([$wanted->uuid], array_column($found, 'id'));
+    }
+
+    /**
+     * ⚠️ A SEARCH IS NOT A WAY OUT OF THE TRASH, IN EITHER DIRECTION. Both listings hold names
+     * that match; each has to answer with its own. Comparing counts would not have caught it —
+     * one on either side is what a listing that ignored the trash returned as well.
+     */
+    public function test_a_search_in_the_trash_answers_with_the_trash(): void
+    {
+        $thrownFile = $this->media(['name' => 'Invoice']);
+        $thrownFile->delete();
+        $keptFile = $this->media(['name' => 'Invoice']);
+
+        $thrownFolder = $this->folder('Invoices');
+        $thrownFolder->delete();
+        $keptFolder = $this->folder('Invoices');
+
+        $live = $this->getJson('/media?search=invoic')->assertOk()->json('data');
+        $trash = $this->getJson('/media?search=invoic&trashed=1')->assertOk()->json('data');
+
+        $this->assertSame([$keptFile->uuid], array_column($live['media'], 'id'));
+        $this->assertSame([$keptFolder->uuid], array_column($live['folders'], 'id'));
+
+        $this->assertSame([$thrownFile->uuid], array_column($trash['media'], 'id'));
+        $this->assertSame([$thrownFolder->uuid], array_column($trash['folders'], 'id'));
+    }
+
+    /**
+     * ⚠️ AND IT REACHES WHAT THE TRASH ONLY SHOWS ONE LEVEL DOWN. At the top of the trash, a
+     * folder whose parent was thrown away too is deliberately not listed — it is reached by
+     * walking into that parent, as in the library. A search is the one thing that has to see
+     * past that rule, or a branch thrown away whole is searchable only at its root.
+     */
+    public function test_a_search_finds_a_trashed_folder_inside_a_trashed_folder(): void
+    {
+        $parent = $this->folder('Archive');
+        $child = $this->folder('Invoices', $parent);
+        $parent->delete();
+        $child->delete();
+
+        $top = $this->getJson('/media?trashed=1')->assertOk()->json('data.folders');
+        $found = $this->getJson('/media?trashed=1&search=invoi')->assertOk()->json('data.folders');
+
+        $this->assertSame([$parent->uuid], array_column($top, 'id'));
+        $this->assertSame([$child->uuid], array_column($found, 'id'));
+    }
+
     public function test_the_family_filter_is_honoured(): void
     {
         $this->media(['type' => 'image', 'mime_type' => 'image/png']);

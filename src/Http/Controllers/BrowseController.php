@@ -72,13 +72,31 @@ final class BrowseController
             ? MediaFolder::onlyTrashed()->pluck((new MediaFolder())->getKeyName())->all()
             : [];
 
+        /*
+         * ⚠️ THE FOLDERS OBEY THE SEARCH TOO, AND THAT IS NOT A COURTESY. Left unfiltered they
+         * were the one half of the listing the term did not reach: searching from a level holding
+         * twelve folders returned all twelve, ahead of the results, and with a page counting a
+         * folder as an item they took the room the matches were supposed to have. A filter that
+         * half the screen ignores is worse than no filter, because the screen still looks
+         * filtered.
+         *
+         * ⚠️ AND A SEARCH FOR A FOLDER LOOKS EVERYWHERE, for the same reason the files do: the
+         * folder somebody is trying to find again is, by definition, not the one in front of
+         * them.
+         */
         $folders = MediaFolder::query()
             ->with('parent')
+            ->when($query->trashed, fn ($builder) => $builder->onlyTrashed())
             ->when(
-                $query->trashed,
-                fn ($builder) => $builder
-                    ->onlyTrashed()
-                    ->when(
+                $query->search !== null,
+                fn ($builder) => $builder->where(
+                    MediaFolder::column('name'),
+                    'like',
+                    '%'.$query->search.'%',
+                ),
+                fn ($builder) => $builder->when(
+                    $query->trashed,
+                    fn ($trash) => $trash->when(
                         $folder === null,
                         fn ($roots) => $roots->where(
                             fn ($nested) => $nested
@@ -87,7 +105,8 @@ final class BrowseController
                         ),
                         fn ($inside) => $inside->atParent('parent_id', $folder?->getKey()),
                     ),
-                fn ($builder) => $builder->atParent('parent_id', $folder?->getKey()),
+                    fn ($live) => $live->atParent('parent_id', $folder?->getKey()),
+                ),
             )
             ->orderBy(MediaFolder::column('name'));
 
