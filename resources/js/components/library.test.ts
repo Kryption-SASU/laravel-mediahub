@@ -584,6 +584,62 @@ describe('the library screen', () => {
     })
 
     /**
+     * ⚠️ THE LISTING WAS SILENTLY CUT UNTIL THE SCREEN ASKED FOR A SECOND PAGE. The server
+     * paginated from the first day and nothing ever went past the first: a folder of three hundred
+     * files showed forty-eight and said nothing about the rest. An absent feature is noticed; a cut
+     * listing is not.
+     */
+    it('asks for another page when one is chosen', async () => {
+        const { wrapper, api } = await library({
+            meta: { current_page: 1, last_page: 3, per_page: 48, total: 120 },
+        })
+
+        await wrapper.findAll('button').filter((b) => b.text() === '2')[0]?.trigger('click')
+        await settle()
+
+        const browsed = api.calls.filter((call) => call.method === 'browse')
+
+        expect((browsed.at(-1)?.args[0] as { page?: unknown }).page).toBe(2)
+    })
+
+    /**
+     * ⚠️ A PAGE IS A PLACE, AND LEAVING IT LETS GO OF WHAT BELONGED TO IT. The selection would
+     * otherwise carry files nobody can see any more into a batch whose confirmation names a count
+     * rather than the files.
+     */
+    it('lets go of the selection when the page changes', async () => {
+        const { wrapper } = await library({
+            meta: { current_page: 1, last_page: 3, per_page: 48, total: 120 },
+        })
+
+        await pick(wrapper, [0])
+
+        expect(wrapper.find('[role="toolbar"]').exists()).toBe(true)
+
+        await wrapper.findAll('button').filter((b) => b.text() === '2')[0]?.trigger('click')
+        await settle()
+
+        expect(wrapper.find('[role="toolbar"]').exists()).toBe(false)
+    })
+
+    /** ⚠️ AND THE WINDOW WITH IT: the file it was showing is not in this page. */
+    it('closes the details window when the page changes', async () => {
+        const { wrapper } = await library({
+            meta: { current_page: 1, last_page: 3, per_page: 48, total: 120 },
+        })
+
+        await wrapper.findAll('[role="option"]')[0]?.trigger('click')
+        await settle()
+
+        expect(detailsOpen(wrapper)).toBe(true)
+
+        await wrapper.findAll('button').filter((b) => b.text() === '2')[0]?.trigger('click')
+        await settle()
+
+        expect(detailsOpen(wrapper)).toBe(false)
+    })
+
+    /**
      * ⚠️ THE TRASH WAS REACHABLE FROM NOWHERE AT ALL. Everything the API needed was already
      * there — browsing accepts `trashed`, restoring walks a folder's subtree and its ancestors —
      * and no screen ever asked for it.

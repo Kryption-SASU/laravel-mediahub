@@ -884,6 +884,43 @@ export const defaultTheme: MhTheme = {
         },
     },
 
+    pager: {
+        root: {
+            layout: 'flex flex-wrap items-center justify-between gap-3',
+            class: '',
+        },
+        summary: {
+            layout: 'text-xs',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+        pages: {
+            layout: 'flex flex-wrap items-center gap-1',
+            class: '',
+        },
+        /* ⚠️ THE SAME BOX FOR EVERY NUMBER, so the row does not shuffle sideways when the page
+         * count goes from 9 to 10 and the current number changes width. */
+        page: {
+            layout: 'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm',
+            class: 'text-[var(--mh-color-foreground,#0f172a)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        current: {
+            layout: 'inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm font-semibold',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        step: {
+            layout: 'inline-flex h-8 w-8 items-center justify-center rounded-md text-sm disabled:opacity-40',
+            class: 'text-[var(--mh-color-foreground,#0f172a)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        gap: {
+            layout: 'inline-flex h-8 w-6 select-none items-center justify-center text-sm',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+        where: {
+            layout: 'text-xs',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+        },
+    },
+
     mediaLibrary: {
         /*
          * ⚠️ A TOGGLE READS AS PRESSED OR IT READS AS NOTHING. Selection mode changes what a
