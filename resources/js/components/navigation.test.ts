@@ -158,6 +158,16 @@ describe('the folders inside a listing', () => {
     const folders = [folder('f1', { name: 'Clients' }), folder('f2', { name: 'Invoices' })]
 
     /**
+     * ⚠️ THE TILE, NOT EVERY BUTTON IN THE LIST. Each entry now carries a menu button of its
+     * own, so an index into `findAll('button')` opened the wrong thing — and the test failed
+     * on the folder it reported rather than on the selector that had moved. The tile is the
+     * one that says the folder's name.
+     */
+    function tile(wrapper: ReturnType<typeof mount>, name: string) {
+        return wrapper.findAll('button').filter((button) => button.text() === name)[0]
+    }
+
+    /**
      * ⚠️ THE SAME TILE AS A FILE, AND THE SAME COLUMNS. A row of pills above a grid of pictures
      * reads as two unrelated things, and the first click somebody makes is on the breadcrumb
      * rather than on the folder they can see.
@@ -165,15 +175,16 @@ describe('the folders inside a listing', () => {
     it('draws a folder rather than printing a slash', () => {
         const wrapper = mount(MhFolderList, { props: { folders } })
 
-        expect(wrapper.findAll('button')).toHaveLength(2)
-        expect(wrapper.findAll('svg')).toHaveLength(2)
+        expect(tile(wrapper, 'Clients')).toBeDefined()
+        expect(tile(wrapper, 'Invoices')).toBeDefined()
+        expect(wrapper.findAll('svg').length).toBeGreaterThanOrEqual(2)
         expect(wrapper.text()).not.toContain('/')
     })
 
     it('opens the one that was clicked', async () => {
         const wrapper = mount(MhFolderList, { props: { folders } })
 
-        await wrapper.findAll('button')[1]?.trigger('click')
+        await tile(wrapper, 'Invoices')?.trigger('click')
 
         expect(wrapper.emitted('open')?.[0]?.[0]).toEqual(folders[1])
     })

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Media } from '../client'
+import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import MhThumbnail from './MhThumbnail.vue'
+import { CHECK_GLYPH, GLYPH_BOX, MENU_GLYPH } from './glyphs'
 
 /**
  * ONE MEDIA, AS SOMETHING YOU CAN CHOOSE.
@@ -30,12 +32,34 @@ const props = withDefaults(
         total?: number
         /** Whether this is the item the grid's single tab stop currently sits on. */
         focused?: boolean
+        /**
+         * ⚠️ WHETHER THE SCREEN IS BUSY CHOOSING. In that state a tile does one thing and one
+         * thing only, so the menu is not offered: a control that acts on a file while somebody is
+         * halfway through picking a dozen is a second answer to a question they have not finished
+         * asking.
+         */
+        picking?: boolean
         ui?: MhComponentOverride
     }>(),
-    { selected: false, index: undefined, total: undefined, focused: false, ui: undefined },
+    {
+        selected: false,
+        index: undefined,
+        total: undefined,
+        focused: false,
+        picking: false,
+        ui: undefined,
+    },
 )
 
+/**
+ * ⚠️ ASKED FOR ON THE ITEM ITSELF, at the point the pointer is at. The actions used to be
+ * reachable only by right-clicking once something was already ticked — which is a rule nobody
+ * discovers, on a screen where the obvious move is to right-click the thing you mean.
+ */
+const emit = defineEmits<{ menu: [event: MouseEvent] }>()
+
 const cls = useMediaTheme('itemCard', () => props.ui)
+const t = useMediaText()
 
 const rootClasses = computed(() =>
     [cls('root'), props.selected ? cls('selected') : ''].join(' ').trim(),
@@ -50,7 +74,57 @@ const rootClasses = computed(() =>
         :aria-setsize="total"
         :aria-posinset="index"
         :tabindex="focused ? 0 : -1"
+        @contextmenu.prevent.stop="picking || emit('menu', $event)"
     >
+        <!-- ⚠️ SHOWN BECAUSE IT IS TICKED, not because a pointer is over it. This is the one mark
+             on the tile that has to survive being looked at from across the room. -->
+        <span v-if="selected" :class="cls('tick')" :aria-hidden="true">
+            <svg
+                :class="cls('tickIcon')"
+                :viewBox="GLYPH_BOX"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+                <path v-for="(drawing, step) in CHECK_GLYPH" :key="step" :d="drawing" />
+            </svg>
+        </span>
+
+        <!--
+            ⚠️ NOT IN THE TAB ORDER, AND THAT IS NOT AN OVERSIGHT. The grid is one tab stop with
+            the arrows moving inside it; a button per item would put twenty-four more between a
+            keyboard user and the rest of the page. The keyboard route to these actions is the
+            context-menu key, which the browser fires as `contextmenu` on the focused item — the
+            handler above — so nothing is lost by leaving this one to the pointer.
+
+            ⚠️ AND IT IS SHOWN ON FOCUS AS WELL AS ON HOVER. A control that only exists under a
+            pointer is invisible to anybody driving the page any other way, including somebody who
+            reached the card with the arrows and wonders what can be done with it.
+        -->
+        <button
+            v-if="!picking"
+            type="button"
+            tabindex="-1"
+            :class="cls('menu')"
+            :aria-label="t('menu.label')"
+            @click.stop="emit('menu', $event)"
+        >
+            <svg
+                :class="cls('menuIcon')"
+                :viewBox="GLYPH_BOX"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+            >
+                <path v-for="(drawing, step) in MENU_GLYPH" :key="step" :d="drawing" />
+            </svg>
+        </button>
+
         <!-- ⚠️ THE FRAME IS WHAT GIVES THE THUMBNAIL A HEIGHT. Asked for `100%` inside a column
              that has none of its own, the picture falls back to its own dimensions, and a grid
              of portrait wallpapers beside videos comes out as a staircase. -->

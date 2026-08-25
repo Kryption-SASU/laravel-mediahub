@@ -32,6 +32,10 @@ function opener(wrapper: ReturnType<typeof mount>, label: string) {
 }
 
 /** Clicks through the picker the field opened: choose the nth option, then confirm. */
+function confirm(wrapper: ReturnType<typeof mount>) {
+    return wrapper.findAll('dialog button').filter((button) => button.text() === 'Choose')[0]
+}
+
 async function pickThrough(wrapper: ReturnType<typeof mount>, positions: number[]): Promise<void> {
     await settle()
 
@@ -39,9 +43,11 @@ async function pickThrough(wrapper: ReturnType<typeof mount>, positions: number[
         await wrapper.findAll('[role="option"]')[position]?.trigger('click')
     }
 
-    const buttons = wrapper.findAll('dialog button')
-
-    await buttons[1]?.trigger('click')
+    /* ⚠️ THE CONFIRM BUTTON BY ITS WORDING, NOT BY ITS POSITION. Every tile in the picker
+     * now carries a menu button of its own, so an index into `findAll('button')` started
+     * clicking one of those instead — and the test failed three assertions later, on the
+     * choice never being reported. */
+    await confirm(wrapper)?.trigger('click')
     await settle()
 }
 
@@ -320,7 +326,7 @@ describe('several media in a form, in an order', () => {
         await settle()
         await wrapper.findAll('[role="option"]')[0]?.trigger('click')
         await wrapper.findAll('[role="option"]')[1]?.trigger('click')
-        await wrapper.findAll('dialog button')[1]?.trigger('click')
+        await confirm(wrapper)?.trigger('click')
         await settle()
 
         expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['m1']])

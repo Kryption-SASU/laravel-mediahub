@@ -93,8 +93,8 @@ const count = computed(
          disappearing along with the bar the moment the selection is emptied. -->
     <MhConfirmDialog
         :open="runner.pending.value !== null"
-        :title="runner.pending.value?.confirm?.title ?? ''"
-        :message="runner.pending.value?.confirm?.message"
+        :title="runner.asking.value?.title ?? ''"
+        :message="runner.asking.value?.message"
         :destructive="runner.pending.value?.destructive ?? false"
         @confirm="runner.confirm()"
         @cancel="runner.cancel()"

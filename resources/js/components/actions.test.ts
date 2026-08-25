@@ -250,6 +250,94 @@ describe('the runner on its own', () => {
     })
 })
 
+describe('what a deletion says it will take', () => {
+    const withFolder: Selection = { folders: ['f1'] }
+
+    async function ask(api: ReturnType<typeof fakeClient>, selection: Selection, wording: string) {
+        const wrapper = mount(MhSelectionBar, {
+            props: { selection, client: api },
+            attachTo: document.body,
+        })
+
+        const action = wrapper
+            .findAll('[role="toolbar"] button')
+            .filter((button) => button.text() === wording)[0]
+
+        await action?.trigger('click')
+        await nextTick()
+        await nextTick()
+
+        return wrapper
+    }
+
+    /**
+     * ⚠️ A FOLDER IS NEVER JUST A FOLDER. The server takes its whole subtree, nesting included, so
+     * "move 1 folder to the trash" can mean four hundred files. Somebody who reads the count and
+     * agrees has agreed to something they were told; somebody who reads "1 folder" has not.
+     */
+    it('names the files inside a folder before trashing it', async () => {
+        const api = fakeClient()
+        api.answerContents({ media: 412, folders: 9 })
+
+        const wrapper = await ask(api, withFolder, 'Move to trash')
+
+        expect(wrapper.find('dialog').text()).toContain('412 files inside')
+    })
+
+    it('says as much before deleting one for good', async () => {
+        const api = fakeClient()
+        api.answerContents({ media: 3, folders: 1 })
+
+        const wrapper = await ask(api, withFolder, 'Delete permanently')
+
+        expect(wrapper.find('dialog').text()).toContain('3 files inside')
+    })
+
+    /** ⚠️ AND ONE FILE IS NOT "1 files" — the rule for that belongs to the language. */
+    it('counts one file in the singular', async () => {
+        const api = fakeClient()
+        api.answerContents({ media: 1, folders: 1 })
+
+        const wrapper = await ask(api, withFolder, 'Move to trash')
+
+        expect(wrapper.find('dialog').text()).toContain('1 file inside')
+    })
+
+    /** ⚠️ AN EMPTY BRANCH IS NOT WARNED ABOUT: a warning that fires every time stops being read. */
+    it('says nothing about files when the folder holds none', async () => {
+        const api = fakeClient()
+        api.answerContents({ media: 0, folders: 1 })
+
+        const wrapper = await ask(api, withFolder, 'Move to trash')
+
+        expect(wrapper.find('dialog').text()).not.toContain('inside')
+    })
+
+    /** ⚠️ NOR IS THE SERVER ASKED WHEN NO FOLDER IS INVOLVED — nothing can be hidden under a file. */
+    it('asks nothing of the server for a selection of files', async () => {
+        const api = fakeClient()
+
+        await ask(api, one, 'Move to trash')
+
+        expect(api.calls.some((call) => call.method === 'contents')).toBe(false)
+    })
+
+    /**
+     * ⚠️ A SERVER THAT CANNOT COUNT DOES NOT BLOCK THE DELETION. Failing to count is not a reason
+     * to refuse: the question is put in its plain form, which is what it was in every case before
+     * this existed. A confirmation that errored instead of asking would make an unreachable
+     * server look like a broken button.
+     */
+    it('still asks the plain question when the count cannot be had', async () => {
+        const api = fakeClient()
+        api.failWith(new MediaHubError(500, null, 'nope'))
+
+        const wrapper = await ask(api, withFolder, 'Move to trash')
+
+        expect(wrapper.find('dialog').text()).toContain('restored from the trash')
+    })
+})
+
 describe('the menu as a menu', () => {
     it('announces itself as one', () => {
         expect(menu().find('[role="menu"]').exists()).toBe(true)
@@ -262,6 +350,33 @@ describe('the menu as a menu', () => {
         await nextTick()
 
         expect(document.activeElement).toBe(wrapper.findAll('[role="menuitem"]')[0]?.element)
+    })
+
+    /**
+     * ⚠️ THE LISTENER ON THE DOCUMENT IS RELEASED WHEN THE MENU CLOSES. Left attached, every menu
+     * that has ever opened keeps one, each holding its component alive through the closure — and
+     * a screen opened and closed all day accumulates them silently. What gives it away is that a
+     * closed menu goes on answering: a second click outside asks it to close all over again.
+     *
+     * ⚠️ CAUGHT BY MUTATION on 25/08/2026 — removing the release changed nothing anywhere else,
+     * because a menu asked to close while already closed looks exactly like one that is closed.
+     */
+    it('stops listening to the document once it has closed', async () => {
+        const wrapper = menu({ open: true })
+        await nextTick()
+
+        document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        await nextTick()
+
+        expect(wrapper.emitted('update:open')).toHaveLength(1)
+
+        await wrapper.setProps({ open: false })
+        await nextTick()
+
+        document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+        await nextTick()
+
+        expect(wrapper.emitted('update:open')).toHaveLength(1)
     })
 
     it('moves through its items with the arrows', async () => {

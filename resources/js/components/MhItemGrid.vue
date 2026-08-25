@@ -34,6 +34,14 @@ const props = withDefaults(
          * sending focus somewhere the eye did not follow.
          */
         columns?: number
+        /**
+         * ⚠️ WHAT A CLICK MEANS, AND IT DEFAULTS TO CHOOSING because that is what a grid of
+         * options is for — a picker dialog and a form field both depend on it. A screen that also
+         * lets somebody merely look sets this to false, and a click then says "show me this"
+         * instead. Doing both at once is how a batch action quietly gathers every file anybody
+         * glanced at, and its confirmation names a count rather than the files.
+         */
+        choosing?: boolean
         ui?: MhComponentOverride
     }>(),
     {
@@ -42,6 +50,7 @@ const props = withDefaults(
         loading: false,
         error: null,
         columns: 1,
+        choosing: true,
         ui: undefined,
     },
 )
@@ -49,6 +58,15 @@ const props = withDefaults(
 const emit = defineEmits<{
     'update:selected': [ids: string[]]
     activate: [media: Media]
+    /**
+     * ⚠️ THE ONE JUST ACTED ON — which is not the same as the selection. A screen showing what
+     * you picked has to be told by a single click; asking for a double one means the details
+     * panel sits empty for anybody who does not think to try, and the first click looks as
+     * though it did nothing.
+     */
+    current: [media: Media]
+    /** Where the actions for one item were asked for, and at which point on screen. */
+    menu: [media: Media, event: MouseEvent]
 }>()
 
 const cls = useMediaTheme('itemGrid', () => props.ui)
@@ -72,6 +90,17 @@ watch(
 const isSelected = (media: Media): boolean => props.selected.includes(media.id)
 
 function toggle(media: Media): void {
+    /*
+     * ⚠️ ONE MEANING AT A TIME. Browsing, the click says "show me this" and ticks nothing —
+     * otherwise every file somebody merely looked at joins the next batch action, whose
+     * confirmation names a count rather than the files. Choosing, it ticks and shows nothing.
+     */
+    if (!props.choosing) {
+        emit('current', media)
+
+        return
+    }
+
     if (!props.multiple) {
         emit('update:selected', isSelected(media) ? [] : [media.id])
 
@@ -178,8 +207,10 @@ const label = computed(() => t('grid.count', {}, props.media.length))
             :index="position + 1"
             :total="media.length"
             :focused="position === cursor"
+            :picking="choosing"
             @click="toggle(item)"
             @dblclick="$emit('activate', item)"
+            @menu="emit('menu', item, $event)"
         >
             <template #meta="slotProps">
                 <slot name="meta" v-bind="slotProps" />

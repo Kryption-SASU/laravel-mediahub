@@ -2,11 +2,19 @@ import { ref, shallowRef, toValue } from 'vue'
 import type { MaybeRefOrGetter, Ref, ShallowRef } from 'vue'
 import { MediaHubError } from '../client'
 import type { Selection } from '../client'
-import type { MhAction } from './actions'
+import type { MhAction, MhConfirmation } from './actions'
 
 export interface UseActionRunner {
     /** The action waiting for an answer, or `null`. */
     pending: ShallowRef<MhAction | null>
+    /**
+     * The question to put, once it has been worked out.
+     *
+     * ⚠️ IT IS SEPARATE FROM THE ACTION BECAUSE IT MAY HAVE HAD TO BE ASKED FOR. A confirmation
+     * that names how many files sit inside a folder cannot be written in advance — only the
+     * server can count them — so what a dialog renders is this, not `pending.confirm`.
+     */
+    asking: ShallowRef<MhConfirmation | null>
     running: Ref<boolean>
     error: ShallowRef<MediaHubError | null>
 
@@ -33,6 +41,7 @@ export function useActionRunner(
     onDone?: (action: MhAction) => void,
 ): UseActionRunner {
     const pending = shallowRef<MhAction | null>(null)
+    const asking = shallowRef<MhConfirmation | null>(null)
     const running = ref(false)
     const error = shallowRef<MediaHubError | null>(null)
 
@@ -60,23 +69,50 @@ export function useActionRunner(
 
     return {
         pending,
+        asking,
         running,
         error,
 
         async request(action: MhAction): Promise<void> {
-            if (action.confirm) {
+            if (!action.confirm) {
+                await perform(action)
+
+                return
+            }
+
+            if (typeof action.confirm !== 'function') {
+                asking.value = action.confirm
                 pending.value = action
 
                 return
             }
 
-            await perform(action)
+            /*
+             * ⚠️ WORKING OUT THE QUESTION IS ITSELF AN OPERATION, and it is reported as one. It
+             * reaches the server, so it can be slow and it can fail; leaving `running` alone
+             * would let somebody press the same action twice while the first is still counting.
+             */
+            running.value = true
+            error.value = null
+
+            try {
+                asking.value = await action.confirm(toValue(selection))
+                pending.value = action
+            } catch (thrown) {
+                error.value =
+                    thrown instanceof MediaHubError
+                        ? thrown
+                        : new MediaHubError(0, null, 'The action could not be carried out.')
+            } finally {
+                running.value = false
+            }
         },
 
         async confirm(): Promise<void> {
             const action = pending.value
 
             pending.value = null
+            asking.value = null
 
             if (action) {
                 await perform(action)
@@ -85,6 +121,7 @@ export function useActionRunner(
 
         cancel(): void {
             pending.value = null
+            asking.value = null
         },
     }
 }

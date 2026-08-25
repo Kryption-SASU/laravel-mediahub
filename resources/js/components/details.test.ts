@@ -152,6 +152,17 @@ describe('the details of one file', () => {
     })
 })
 
+/**
+ * ⚠️ FOUND BY WHAT IT ANNOUNCES, since it no longer says anything on screen. The wording moved to
+ * the label when the control became a drawing — which is also what tells somebody the copy
+ * actually happened.
+ */
+function copier(wrapper: ReturnType<typeof mount>) {
+    return wrapper
+        .findAll('button')
+        .filter((button) => ['Copy', 'Copied'].includes(button.attributes('aria-label') ?? ''))[0]
+}
+
 describe('what the panel says about a file', () => {
     /**
      * ⚠️ THE ADDRESS IS A FIELD, NOT A LINE OF TEXT. A `<span>` cannot be selected reliably, and
@@ -176,11 +187,14 @@ describe('what the panel says about a file', () => {
 
         const { wrapper } = panel()
 
-        await wrapper.findAll('button').filter((button) => button.text() === 'Copy')[0]?.trigger('click')
+        await copier(wrapper)?.trigger('click')
         await nextTick()
 
         expect(written).toEqual(['/media/m1/file'])
-        expect(wrapper.text()).toContain('Copied')
+
+        /* ⚠️ THE CONFIRMATION IS IN THE LABEL, because the control is a drawing. An icon button
+         * that says nothing is one a screen reader announces as "button". */
+        expect(copier(wrapper)?.attributes('aria-label')).toBe('Copied')
     })
 
     /**
@@ -194,10 +208,10 @@ describe('what the panel says about a file', () => {
 
         const { wrapper } = panel()
 
-        await wrapper.findAll('button').filter((button) => button.text() === 'Copy')[0]?.trigger('click')
+        await copier(wrapper)?.trigger('click')
         await nextTick()
 
-        expect(wrapper.text()).not.toContain('Copied')
+        expect(copier(wrapper)?.attributes('aria-label')).toBe('Copy')
     })
 
     it('gives the moments the file carries', () => {

@@ -34,6 +34,22 @@ export const FOLDER_ADD_GLYPH: readonly string[] = [
     'M9 14.5h6',
 ]
 
+/**
+ * ⚠️ THREE DOTS DRAWN AS ZERO-LENGTH STROKES. A round line cap turns `M12 6h.01` into a disc, so
+ * the marks belong to the same family as every other glyph here — one `stroke-width`, one colour,
+ * `currentColor` throughout — rather than being three filled circles that ignore all of it.
+ */
+export const MENU_GLYPH: readonly string[] = ['M12 6h.01', 'M12 12h.01', 'M12 18h.01']
+
+export const CHECK_GLYPH: readonly string[] = ['M5 12.5l4.5 4.5L19 7.5']
+
+export const COPY_GLYPH: readonly string[] = [
+    'M9 9h10v10a1.5 1.5 0 0 1-1.5 1.5H9Z',
+    'M15 9V4.5A1.5 1.5 0 0 0 13.5 3h-8A1.5 1.5 0 0 0 4 4.5v10A1.5 1.5 0 0 0 5.5 16H9',
+]
+
+export const CLOSE_GLYPH: readonly string[] = ['M6 6l12 12', 'M18 6l-12 12']
+
 export const UPLOAD_GLYPH: readonly string[] = [
     'M12 16V4',
     'M8 8l4-4 4 4',

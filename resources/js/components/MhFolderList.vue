@@ -4,7 +4,7 @@ import type { Folder } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
-import { FOLDER_GLYPH, GLYPH_BOX } from './glyphs'
+import { CHECK_GLYPH, FOLDER_GLYPH, GLYPH_BOX, MENU_GLYPH } from './glyphs'
 
 /**
  * THE FOLDERS INSIDE THE ONE BEING LOOKED AT.
@@ -21,14 +21,42 @@ const props = withDefaults(
     defineProps<{
         folders: readonly Folder[]
         label?: string
+        /**
+         * ⚠️ WHAT A CLICK MEANS HERE TOO. Browsing, it walks into the folder; choosing, it ticks
+         * it — a batch that could act on files but never on the folder holding them would be a
+         * rule nobody can see and everybody trips over.
+         */
+        picking?: boolean
+        /** Identifiers of the folders currently ticked. */
+        selected?: readonly string[]
         ui?: MhComponentOverride
     }>(),
-    { label: undefined, ui: undefined },
+    { label: undefined, picking: false, selected: () => [], ui: undefined },
 )
 
-defineEmits<{ open: [folder: Folder] }>()
+const emit = defineEmits<{
+    open: [folder: Folder]
+    /**
+     * ⚠️ A FOLDER HAS ACTIONS TOO, and offering them only on files makes the grid look as though
+     * half of it were decoration. Where they were asked for is passed along, because a menu has
+     * to open at the pointer rather than in a corner.
+     */
+    menu: [folder: Folder, event: MouseEvent]
+    /** Ticked or unticked, while choosing. */
+    toggle: [folder: Folder]
+}>()
 
 const cls = useMediaTheme('folderList', () => props.ui)
+
+/* ⚠️ THE TICK FOLLOWS WHAT THE SCREEN HOLDS, not a copy kept here. A second list would go
+ * stale the first time somebody cleared the selection from anywhere else. */
+const isChosen = (folder: Folder): boolean => props.selected.includes(folder.id)
+
+/* ⚠️ BUILT HERE RATHER THAN IN THE MARKUP. A quoted empty string in a `:class` binding is
+ * indistinguishable, to the guard that forbids hardcoded classes, from a utility typed in a
+ * hurry — and a guard that cries wolf on correct code is one somebody deletes. */
+const tileClasses = (folder: Folder): string =>
+    [cls('item'), isChosen(folder) ? cls('selected') : ''].join(' ').trim()
 const t = useMediaText()
 
 /*
@@ -44,11 +72,56 @@ const words = computed(() => ({
 <template>
     <nav v-if="folders.length > 0" :class="cls('root')" :aria-label="words.label">
         <ul :class="cls('list')">
-            <li v-for="folder in folders" :key="folder.id">
+            <!-- ⚠️ THE MENU IS A SIBLING OF THE TILE, NOT A CHILD OF IT. The tile is a button —
+                 opening the folder is what it is for — and a button inside a button is markup no
+                 browser agrees on: some drop the inner one, some fire both. -->
+            <li v-for="folder in folders" :key="folder.id" :class="cls('entry')">
+                <button
+                    v-if="!picking"
+                    type="button"
+                    tabindex="-1"
+                    :class="cls('menu')"
+                    :aria-label="t('menu.label')"
+                    @click.stop="emit('menu', folder, $event)"
+                >
+                    <svg
+                        :class="cls('menuIcon')"
+                        :viewBox="GLYPH_BOX"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path v-for="(drawing, step) in MENU_GLYPH" :key="step" :d="drawing" />
+                    </svg>
+                </button>
+
                 <!-- ⚠️ THE SAME TILE AS A FILE, ON PURPOSE. A row of pills above a grid of
                      pictures reads as two unrelated things, and the first click somebody makes
                      is on the breadcrumb rather than on the folder they can see. -->
-                <button type="button" :class="cls('item')" @click="$emit('open', folder)">
+                <button
+                    type="button"
+                    :class="tileClasses(folder)"
+                    :aria-pressed="picking ? isChosen(folder) : undefined"
+                    @click="picking ? emit('toggle', folder) : emit('open', folder)"
+                    @contextmenu.prevent.stop="picking || emit('menu', folder, $event)"
+                >
+                    <span v-if="isChosen(folder)" :class="cls('tick')" :aria-hidden="true">
+                        <svg
+                            :class="cls('tickIcon')"
+                            :viewBox="GLYPH_BOX"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path v-for="(drawing, step) in CHECK_GLYPH" :key="step" :d="drawing" />
+                        </svg>
+                    </span>
+
                     <span :class="cls('preview')">
                         <slot name="icon" :folder="folder">
                             <svg

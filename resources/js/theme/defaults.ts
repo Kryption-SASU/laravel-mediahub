@@ -151,9 +151,41 @@ export const defaultTheme: MhTheme = {
     },
 
     itemCard: {
+        /*
+         * ⚠️ `group` AND `relative` ARE STRUCTURE, NOT DECORATION. The menu button is positioned
+         * against this box and revealed by hovering it; a host replacing the skin and dropping
+         * either would leave that control stuck in the corner of the page, or permanently on.
+         */
         root: {
-            layout: 'flex cursor-pointer flex-col gap-2 p-2 focus:outline-none',
+            layout: 'group relative flex cursor-pointer flex-col gap-2 p-2 focus:outline-none',
             class: 'rounded-md bg-[var(--mh-color-surface,#ffffff)] ring-1 ring-[var(--mh-color-muted,#f1f5f9)] hover:ring-[var(--mh-color-accent,#1d4ed8)]',
+        },
+        /*
+         * ⚠️ HIDDEN BY OPACITY RATHER THAN BY `hidden`, and shown on focus as well as on hover.
+         * Removed from the layout it would shift the tile as the pointer arrives; removed from
+         * the accessibility tree it would be a control only a mouse knows about.
+         */
+        menu: {
+            layout: 'absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow ring-1 ring-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        menuIcon: {
+            layout: 'h-4 w-4',
+            class: '',
+        },
+        /*
+         * ⚠️ BEING CHOSEN HAS TO BE SOMETHING YOU CAN SEE, not something you infer from a ring
+         * two pixels wider than the resting one. Somebody ticking six files out of forty should
+         * be able to check their work by looking, and a difference at the edge of a tile does
+         * not survive a photograph behind it.
+         */
+        tick: {
+            layout: 'absolute left-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        tickIcon: {
+            layout: 'h-4 w-4',
+            class: '',
         },
         /*
          * ⚠️ THE SELECTED STATE IS A SEPARATE ENTRY, NOT A COLOUR SWAPPED INTO `root`. A host
@@ -556,6 +588,42 @@ export const defaultTheme: MhTheme = {
             class: 'text-[var(--mh-color-muted-foreground,#475569)]',
         },
     },
+    detailsDialog: {
+        root: {
+            layout: 'm-auto w-full max-w-lg rounded-lg p-0 backdrop:bg-black/50',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow-lg',
+        },
+        body: {
+            layout: 'flex flex-col',
+            class: '',
+        },
+        header: {
+            layout: 'flex items-start justify-between gap-3 px-4 pt-4',
+            class: '',
+        },
+        title: {
+            layout: 'min-w-0 truncate text-base font-semibold',
+            class: '',
+        },
+        close: {
+            layout: 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+            class: 'text-[var(--mh-color-muted-foreground,#475569)] hover:bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        closeIcon: {
+            layout: 'h-5 w-5',
+            class: '',
+        },
+        /*
+         * ⚠️ THE PANEL WEARS NOTHING INSIDE THE WINDOW. On its own it is a card — a surface,
+         * a ring, a radius — because in a column it has to be told apart from the grid beside
+         * it. Inside a window that surface is already there, and a second one reads as a box
+         * drawn in a box. What is passed down is this string, so a host can put one back.
+         */
+        panel: {
+            layout: '',
+            class: '',
+        },
+    },
     detailsPanel: {
         /*
          * ⚠️ A COLUMN OF ITS OWN FROM `lg` UP, and it does not shrink. A details panel that
@@ -563,7 +631,7 @@ export const defaultTheme: MhTheme = {
          * file with a longer name, and the grid reflows underneath the click that caused it.
          */
         root: {
-            layout: 'flex w-full flex-col gap-3 p-4 lg:w-72 lg:shrink-0',
+            layout: 'flex w-full flex-col gap-3 p-4',
             class: 'rounded-md bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] ring-1 ring-[var(--mh-color-muted,#f1f5f9)]',
         },
         /*
@@ -572,7 +640,7 @@ export const defaultTheme: MhTheme = {
          * that choosing a file will show anything at all.
          */
         empty: {
-            layout: 'flex w-full flex-col items-center justify-center gap-1 p-6 text-center lg:w-72 lg:shrink-0',
+            layout: 'flex w-full flex-col items-center justify-center gap-1 p-6 text-center',
             class: 'rounded-md text-[var(--mh-color-muted-foreground,#475569)] ring-1 ring-[var(--mh-color-muted,#f1f5f9)]',
         },
         emptyTitle: {
@@ -600,9 +668,23 @@ export const defaultTheme: MhTheme = {
             layout: 'w-full min-w-0 rounded-md px-2 py-1 text-xs',
             class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)]',
         },
+        /*
+         * ⚠️ A DRAWING RATHER THAN A WORD, and the word moves to the label. "Copy" beside a field
+         * holding a URL is three characters wider than the field can spare on a narrow panel, and
+         * it says in text what an icon says at a glance. What it must never lose is the label:
+         * an icon button with nothing to announce is a button a screen reader calls "button".
+         */
         copy: {
-            layout: 'inline-flex shrink-0 items-center rounded-md px-2 py-1 text-xs font-medium',
+            layout: 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
             class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
+        },
+        copyIcon: {
+            layout: 'h-4 w-4',
+            class: '',
+        },
+        copied: {
+            layout: 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
         },
         use: {
             layout: 'w-full rounded-md px-3 py-2 text-sm font-medium',
@@ -616,9 +698,14 @@ export const defaultTheme: MhTheme = {
             layout: 'flex flex-col',
             class: '',
         },
+        /*
+         * ⚠️ A TERM IS CONTENT, NOT DECORATION. Set in the muted tone it was the palest thing on
+         * a panel of pale things — uppercase and small on top of that — and the words naming each
+         * fact were harder to read than the facts. Reported from a real screen on 25/08/2026.
+         */
         term: {
-            layout: 'text-xs uppercase',
-            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+            layout: 'text-xs font-semibold uppercase',
+            class: 'text-[var(--mh-color-foreground,#0f172a)]',
         },
         value: {
             layout: 'truncate',
@@ -629,8 +716,8 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         label: {
-            layout: 'text-xs font-medium',
-            class: 'text-[var(--mh-color-muted-foreground,#475569)]',
+            layout: 'text-xs font-semibold',
+            class: 'text-[var(--mh-color-foreground,#0f172a)]',
         },
         input: {
             layout: 'rounded-md px-2 py-1 text-sm',
@@ -731,6 +818,39 @@ export const defaultTheme: MhTheme = {
             layout: 'grid gap-3',
             class: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
         },
+        /* ⚠️ THE LIST ITEM CARRIES THE POSITIONING, because the tile is a button and the menu
+         * cannot live inside one. See `itemCard.root` for the same two classes and the same
+         * reason. */
+        entry: {
+            layout: 'group relative',
+            class: '',
+        },
+        menu: {
+            layout: 'absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100',
+            class: 'bg-[var(--mh-color-surface,#ffffff)] text-[var(--mh-color-foreground,#0f172a)] shadow ring-1 ring-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        menuIcon: {
+            layout: 'h-4 w-4',
+            class: '',
+        },
+        /*
+         * ⚠️ BEING CHOSEN HAS TO BE SOMETHING YOU CAN SEE, not something you infer from a ring
+         * two pixels wider than the resting one. Somebody ticking six files out of forty should
+         * be able to check their work by looking, and a difference at the edge of a tile does
+         * not survive a photograph behind it.
+         */
+        tick: {
+            layout: 'absolute left-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
+        tickIcon: {
+            layout: 'h-4 w-4',
+            class: '',
+        },
+        selected: {
+            layout: '',
+            class: 'ring-2 ring-[var(--mh-color-accent,#1d4ed8)]',
+        },
         item: {
             layout: 'flex w-full cursor-pointer flex-col gap-2 p-2 focus:outline-none',
             class: 'rounded-md bg-[var(--mh-color-surface,#ffffff)] ring-1 ring-[var(--mh-color-muted,#f1f5f9)] hover:ring-[var(--mh-color-accent,#1d4ed8)]',
@@ -750,6 +870,20 @@ export const defaultTheme: MhTheme = {
     },
 
     mediaLibrary: {
+        /*
+         * ⚠️ A TOGGLE READS AS PRESSED OR IT READS AS NOTHING. Selection mode changes what a
+         * click does everywhere on the screen; if the control that turned it on looks exactly
+         * like the one that turns it off, the only way to tell which state you are in is to
+         * click something and see what happens.
+         */
+        picking: {
+            layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            class: 'bg-[var(--mh-color-muted,#f1f5f9)] text-[var(--mh-color-foreground,#0f172a)] hover:opacity-90',
+        },
+        pickingOn: {
+            layout: 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium',
+            class: 'bg-[var(--mh-color-accent,#1d4ed8)] text-[var(--mh-color-accent-foreground,#ffffff)]',
+        },
         root: {
             layout: 'flex flex-col gap-4',
             class: 'text-[var(--mh-color-foreground,#0f172a)]',

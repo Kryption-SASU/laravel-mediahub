@@ -1,6 +1,7 @@
 import { MediaHubError } from './errors'
 import type {
     AffectedCount,
+    SelectionContents,
     BrowsePage,
     BrowseQuery,
     Folder,
@@ -47,6 +48,13 @@ export interface MediaHubClient {
     trash(selection: Selection): Promise<AffectedCount>
     restore(selection: Selection): Promise<AffectedCount>
     purge(selection: Selection): Promise<AffectedCount>
+
+    /**
+     * ⚠️ ASKED BEFORE DESTROYING SOMETHING, not after. A folder is never just a folder: the
+     * server takes its whole subtree, so this is the only way a confirmation can name what
+     * is about to go with it.
+     */
+    contents(selection: Selection): Promise<SelectionContents>
     emptyTrash(): Promise<AffectedCount>
 
     quota(): Promise<Quota>
@@ -235,6 +243,10 @@ export function createMediaHubClient(options: MediaHubClientOptions): MediaHubCl
 
         async purge(selection: Selection): Promise<AffectedCount> {
             return (await request<{ data: AffectedCount }>('POST', 'trash/purge', selectionBody(selection))).data
+        },
+
+        async contents(selection: Selection): Promise<SelectionContents> {
+            return (await request<{ data: SelectionContents }>('POST', 'contents', selectionBody(selection))).data
         },
 
         async emptyTrash(): Promise<AffectedCount> {

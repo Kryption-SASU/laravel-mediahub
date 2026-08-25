@@ -6,6 +6,7 @@ import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import { useMediaActions } from '../vue/useMediaActions'
 import MhErrorState from './MhErrorState.vue'
+import { CHECK_GLYPH, COPY_GLYPH, GLYPH_BOX } from './glyphs'
 import MhThumbnail from './MhThumbnail.vue'
 
 /**
@@ -69,6 +70,7 @@ const words = computed(() => ({
     copied: t('details.copied'),
     created: t('details.created'),
     updated: t('details.updated'),
+    orientation: t('details.orientation'),
 }))
 
 const actions = useMediaActions(props.client)
@@ -104,6 +106,7 @@ watch(
         /* ⚠️ AND THE CONFIRMATION GOES WITH THE FILE IT BELONGED TO. "Copied" left standing over
          * the next file's address claims something nobody did. */
         copied.value = false
+
     },
     { immediate: true },
 )
@@ -139,10 +142,35 @@ function readable(bytes: number): string {
     return rounded + ' ' + units[unit]
 }
 
-const dimensions = computed(() => {
-    const media = props.media
+const size = computed<{ width: number; height: number } | null>(() =>
+    props.media?.width && props.media.height
+        ? { width: props.media.width, height: props.media.height }
+        : null,
+)
 
-    return media?.width && media.height ? media.width + ' × ' + media.height : null
+const dimensions = computed(() => {
+    const measured = size.value
+
+    return measured === null ? null : measured.width + ' × ' + measured.height
+})
+
+/**
+ * ⚠️ SAID IN A WORD RATHER THAN LEFT TO BE WORKED OUT. "1920 × 1080" is a fact somebody has to
+ * compare two halves of; "landscape" is the answer they were after. A square is neither of the
+ * other two and saying so is not pedantry — it is the case where guessing from a glance fails.
+ */
+const orientation = computed<string | null>(() => {
+    const measured = size.value
+
+    if (measured === null) {
+        return null
+    }
+
+    if (measured.width === measured.height) {
+        return t('details.square')
+    }
+
+    return measured.width > measured.height ? t('details.landscape') : t('details.portrait')
 })
 
 /*
@@ -284,8 +312,29 @@ async function save(): Promise<void> {
                     :value="media.url"
                 />
 
-                <button type="button" :class="cls('copy')" @click="copy">
-                    {{ copied ? words.copied : words.copy }}
+                <button
+                    type="button"
+                    :class="copied ? cls('copied') : cls('copy')"
+                    :aria-label="copied ? words.copied : words.copy"
+                    :title="copied ? words.copied : words.copy"
+                    @click="copy"
+                >
+                    <svg
+                        :class="cls('copyIcon')"
+                        :viewBox="GLYPH_BOX"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path
+                            v-for="(drawing, step) in copied ? CHECK_GLYPH : COPY_GLYPH"
+                            :key="step"
+                            :d="drawing"
+                        />
+                    </svg>
                 </button>
             </div>
         </div>
@@ -304,6 +353,11 @@ async function save(): Promise<void> {
             <div v-if="dimensions" :class="cls('fact')">
                 <dt :class="cls('term')">{{ t('details.dimensions') }}</dt>
                 <dd :class="cls('value')">{{ dimensions }}</dd>
+            </div>
+
+            <div v-if="orientation" :class="cls('fact')">
+                <dt :class="cls('term')">{{ words.orientation }}</dt>
+                <dd :class="cls('value')">{{ orientation }}</dd>
             </div>
 
             <!-- ⚠️ A MOMENT THE SERVER DID NOT GIVE IS ABSENT, not an empty row: a term with

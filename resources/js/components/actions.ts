@@ -17,6 +17,12 @@ import type { MhTranslator } from '../i18n/context'
  * their trade and not to a media library; a hardcoded list would leave them writing a second
  * toolbar beside ours, which is the first step towards replacing both.
  */
+/** What a confirmation puts to somebody. */
+export interface MhConfirmation {
+    title: string
+    message?: string
+}
+
 export interface MhAction {
     /** Stable across versions: a host disabling or reordering actions refers to this. */
     id: string
@@ -35,8 +41,16 @@ export interface MhAction {
      */
     destructive?: boolean
 
-    /** Present means: ask first. Absent means: do it. */
-    confirm?: { title: string; message?: string }
+    /**
+     * Present means: ask first. Absent means: do it.
+     *
+     * ⚠️ IT MAY BE A FUNCTION, BECAUSE SOME QUESTIONS CANNOT BE WRITTEN IN ADVANCE. Trashing a
+     * folder takes its whole subtree, so the sentence that matters — "and the four hundred files
+     * inside" — is only knowable once there is a selection to ask about, and only the server can
+     * answer. A fixed string there would either stay silent about the files or warn about them
+     * every time, including for the folder that holds none.
+     */
+    confirm?: MhConfirmation | ((selection: Selection) => MhConfirmation | Promise<MhConfirmation>)
 
     run(selection: Selection): Promise<unknown>
 }
@@ -50,6 +64,52 @@ export interface UseMediaActionList {
 
 function isEmpty(selection: Selection): boolean {
     return (selection.media?.length ?? 0) + (selection.folders?.length ?? 0) === 0
+}
+
+/**
+ * THE QUESTION PUT BEFORE SOMETHING IRREVERSIBLE — and it names what is actually at stake.
+ *
+ * ⚠️ A FOLDER IS NEVER JUST A FOLDER. The server takes its whole subtree, nesting included, so
+ * "move 1 folder to the trash" can mean four hundred files. Somebody who reads the count and
+ * agrees has agreed to something they were told; somebody who reads "1 folder" has not.
+ *
+ * ⚠️ THE COUNT COMES FROM THE SERVER, because only it can walk the tree — and it walks it through
+ * the scope, so the figure never describes a branch the caller cannot see.
+ *
+ * ⚠️ AND A SERVER THAT CANNOT ANSWER DOES NOT BLOCK THE ACTION. Failing to count is not a reason
+ * to refuse a deletion: the question is put in its plain form, which is what it used to be in
+ * every case. A confirmation that errors instead of asking would make an unreachable server look
+ * like a broken button.
+ */
+async function warn(
+    client: MediaHubClient,
+    t: MhTranslator,
+    selection: Selection,
+    kind: 'trash' | 'purge',
+): Promise<MhConfirmation> {
+    const plain = {
+        title: t('actions.' + kind + '.confirmTitle'),
+        message: t('actions.' + kind + '.confirmMessage'),
+    }
+
+    if ((selection.folders?.length ?? 0) === 0) {
+        return plain
+    }
+
+    try {
+        const carried = await client.contents(selection)
+
+        if (carried.media === 0) {
+            return plain
+        }
+
+        return {
+            title: plain.title,
+            message: t('actions.' + kind + '.confirmInside', {}, carried.media),
+        }
+    } catch {
+        return plain
+    }
 }
 
 /**
@@ -72,10 +132,7 @@ export function defaultActions(client: MediaHubClient, t: MhTranslator): MhActio
             id: 'trash',
             label: t('actions.trash'),
             destructive: true,
-            confirm: {
-                title: t('actions.trash.confirmTitle'),
-                message: t('actions.trash.confirmMessage'),
-            },
+            confirm: (selection) => warn(client, t, selection, 'trash'),
             available: (selection) => !isEmpty(selection),
             run: (selection) => client.trash(selection),
         },
@@ -93,10 +150,7 @@ export function defaultActions(client: MediaHubClient, t: MhTranslator): MhActio
              * ⚠️ THE ONLY ACTION HERE THAT CANNOT BE UNDONE, and the wording of the question says
              * so rather than asking "are you sure?" — which is what everybody clicks through.
              */
-            confirm: {
-                title: t('actions.purge.confirmTitle'),
-                message: t('actions.purge.confirmMessage'),
-            },
+            confirm: (selection) => warn(client, t, selection, 'purge'),
             available: (selection) => !isEmpty(selection),
             run: (selection) => client.purge(selection),
         },
