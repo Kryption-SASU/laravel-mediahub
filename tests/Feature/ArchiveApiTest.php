@@ -261,6 +261,55 @@ class ArchiveApiTest extends TestCase
         ])->assertStatus(422)->assertJsonPath('reason', 'archive_too_many_files');
     }
 
+    /**
+     * ⚠️ WHAT THE CONFIGURATION PERMITS IS NOT WHAT THE MACHINE CAN FINISH, and the second bound
+     * exists because the first cannot see the difference. Past the first byte the 200 is gone:
+     * an archive cut off halfway downloads, opens, and is missing files, with nothing anywhere
+     * to say so — not the log, which records a completed request, and not the person, who has a
+     * file.
+     */
+    public function test_an_archive_beyond_what_this_machine_can_finish_is_refused(): void
+    {
+        /* Generous policy, tiny capacity: one second at one byte a second. */
+        $this->app['config']->set('mediahub.archives.max_bytes', 1024 * 1024 * 1024);
+        $this->app['config']->set('mediahub.archives.time_budget', 1);
+        $this->app['config']->set('mediahub.archives.throughput', 1);
+
+        $this->postJson('/media/archive', ['media' => [$this->media([], 'far too long')->uuid]])
+            ->assertStatus(422)
+            /* ⚠️ A DIFFERENT REASON FROM "TOO LARGE", because they call for different actions:
+             * one says the selection exceeds a policy somebody chose, the other says the policy
+             * exceeds the machine, and the fix is in `php-fpm.conf` rather than the selection. */
+            ->assertJsonPath('reason', 'archive_beyond_capacity');
+    }
+
+    /** ⚠️ AND A DECLARED BUDGET LETS THE SAME SELECTION THROUGH, which is what makes the refusal
+     * above a bound rather than a wall. */
+    public function test_a_declared_budget_lets_the_same_archive_through(): void
+    {
+        $this->app['config']->set('mediahub.archives.max_bytes', 1024 * 1024 * 1024);
+        $this->app['config']->set('mediahub.archives.time_budget', 600);
+
+        $this->postJson('/media/archive', ['media' => [$this->media([], 'far too long')->uuid]])
+            ->assertOk();
+    }
+
+    /**
+     * ⚠️ "NO LIMIT" IN THE CONFIGURATION IS STILL NOT INFINITY. It means the package imposes none
+     * of its own; read as "the machine can send anything", it is what lets a two-hour archive
+     * start and be cut off at minute four.
+     */
+    public function test_an_unlimited_policy_is_still_bounded_by_the_machine(): void
+    {
+        $this->app['config']->set('mediahub.archives.max_bytes', 0);
+        $this->app['config']->set('mediahub.archives.time_budget', 1);
+        $this->app['config']->set('mediahub.archives.throughput', 1);
+
+        $this->postJson('/media/archive', ['media' => [$this->media([], 'far too long')->uuid]])
+            ->assertStatus(422)
+            ->assertJsonPath('reason', 'archive_beyond_capacity');
+    }
+
     public function test_an_archive_that_is_too_heavy_is_refused(): void
     {
         /*

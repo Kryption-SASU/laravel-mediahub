@@ -411,6 +411,52 @@ return [
          * complete one — which is exactly what the original module produced.
          */
         'report_name' => 'MISSING.txt',
+
+        /*
+         * ── WHAT THIS MACHINE CAN ACTUALLY FINISH SENDING ───────────────────
+         *
+         * ⚠️ THE TWO LIMITS ABOVE ARE A POLICY; THESE TWO ARE A CAPACITY. An archive that dies
+         * halfway has already sent its 200: the browser saves a ZIP that opens, lists most of
+         * its files and is missing the rest, and nothing anywhere says so. The package
+         * therefore refuses before the first byte rather than doing its best.
+         *
+         * ⚠️ AND WHAT CUTS THE DOWNLOAD CANNOT BE READ FROM INSIDE PHP. `max_execution_time` is
+         * largely beside the point — on Unix it does not count time spent waiting on input and
+         * output, which is nearly all of streaming a remote object store. The real ceilings are
+         * PHP-FPM's `request_terminate_timeout` and the front-end server's proxy timeout.
+         *
+         * ⚠️ SO SAY WHAT YOURS IS. Left at zero, the package assumes sixty seconds — the
+         * commonest default of both — which with the throughput below allows roughly 600 MB.
+         * The health report says when that assumption is what is holding the ceiling down.
+         */
+
+        /** Seconds a streamed response may really run here. 0 = undeclared, and assumed modest. */
+        'time_budget' => 0,
+
+        /**
+         * Bytes per second the storage is read at, used to turn the budget into a size.
+         *
+         * ⚠️ A STATED FIGURE RATHER THAN A MEASUREMENT. How fast a hundred objects come back
+         * from a remote store is not knowable before doing it, and measuring it once would bake
+         * in whatever the network was doing that afternoon.
+         */
+        'throughput' => 10485760,
+    ],
+
+    /*
+     * ── THE HEALTH REPORT ───────────────────────────────────────────────────
+     *
+     * ⚠️ OFF BY DEFAULT, AND NOT BECAUSE IT IS DANGEROUS. It reports this machine's PHP limits
+     * and which extensions are loaded — modest information, but information about the server
+     * rather than about the library, and there is no reason for it to be one click away from
+     * everybody who can look at a photograph.
+     *
+     * ⚠️ IT IS MEANT TO BE TURNED ON WHILE THE PACKAGE IS BEING SET UP, read, acted on, and
+     * turned off again. That is also why it is a flag here rather than a permission: the person
+     * who needs it is the person editing this file.
+     */
+    'diagnostics' => [
+        'enabled' => env('MEDIAHUB_DIAGNOSTICS', false),
     ],
 
     'api' => [
