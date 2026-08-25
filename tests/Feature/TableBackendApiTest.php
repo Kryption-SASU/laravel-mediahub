@@ -452,6 +452,85 @@ class TableBackendApiTest extends TestCase
         $this->assertSame(1, $body['media']);
     }
 
+    // ── What the upload measured, on a schema with nowhere to put it ─────────
+
+    /**
+     * ⚠️ THE UPLOAD ALREADY MEASURED THE PICTURE, AND THE VALUE WENT NOWHERE. `getimagesize()` is
+     * called on the file as it lands, and the result was assigned to `width` and `height` — two
+     * logical columns this preset maps to `null`, because the adopted tables really do not carry
+     * them. Computed, assigned, dropped: the screen then showed nothing where a size belongs, on
+     * every installation of this kind.
+     *
+     * ⚠️ AND IT IS THE ORIGINAL THAT IS MEASURED, from the uploaded file before a single
+     * derivative exists. A thumbnail's dimensions are a fact about the thumbnail.
+     */
+    public function test_it_keeps_the_size_it_measured_where_the_schema_has_room(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $measured = getimagesize($path);
+
+        $body = $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful()->json('data');
+
+        $this->assertFalse(Media::hasColumn('width'));
+        $this->assertSame($measured[0], $body[0]['width']);
+        $this->assertSame($measured[1], $body[0]['height']);
+    }
+
+    /** ⚠️ AND IT COMES BACK ON THE NEXT READ, not only in the answer to the upload. */
+    public function test_the_size_survives_the_round_trip(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful();
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertIsInt($body['media'][0]['width']);
+        $this->assertIsInt($body['media'][0]['height']);
+    }
+
+    /**
+     * ⚠️ A FILE THAT WAS THERE BEFORE STAYS WITHOUT ONE, and the screen leaves the row out rather
+     * than printing an empty size. Nothing is measured retroactively: the bytes would have to be
+     * read again, one object at a time, for a fact nobody asked for.
+     */
+    public function test_a_file_that_was_never_measured_reports_no_size(): void
+    {
+        $this->media(['mime_type' => 'image/png']);
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertNull($body['media'][0]['width']);
+        $this->assertNull($body['media'][0]['height']);
+    }
+
+    /**
+     * ⚠️ THE PROPERTIES ARE FREE-FORM AND HOSTS WRITE IN THEM TOO. Anything in there that is not
+     * a number must not reach a client that was promised one.
+     */
+    public function test_it_refuses_to_report_a_size_that_is_not_one(): void
+    {
+        $media = $this->media(['mime_type' => 'image/png']);
+        $media->custom_properties = ['width' => 'wide', 'height' => null];
+        $media->save();
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertNull($body['media'][0]['width']);
+        $this->assertNull($body['media'][0]['height']);
+    }
+
     // ── Who owns what the API creates ────────────────────────────────────────
 
     /**

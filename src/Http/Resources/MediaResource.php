@@ -50,8 +50,15 @@ final class MediaResource extends JsonResource
             'mime_type' => $this->mime_type,
             'type' => $this->type,
             'size' => (int) $this->size,
-            'width' => $this->width,
-            'height' => $this->height,
+            /*
+             * ⚠️ READ FROM WHICHEVER PLACE THIS SCHEMA HAS. Where the columns exist they are the
+             * answer; where they do not — and the shipped `legacy` preset maps both to `null`,
+             * because the tables really do not carry them — the upload parks what it measured in
+             * the free-form properties instead. One field on the wire either way, so no client
+             * has to know which kind of schema it is talking to.
+             */
+            'width' => $this->measured('width'),
+            'height' => $this->measured('height'),
             'duration' => $this->duration,
             /*
              * ⚠️ ALWAYS PRESENT, EVEN AS `null`. A `whenLoaded()` would make the key DISAPPEAR
@@ -69,6 +76,24 @@ final class MediaResource extends JsonResource
             'created_at' => optional($this->created_at)->toAtomString(),
             'updated_at' => optional($this->updated_at)->toAtomString(),
         ];
+    }
+
+    /**
+     * ⚠️ ONLY A WHOLE NUMBER COMES BACK. The properties are free-form and written by hosts as
+     * well as by us: a string, a float or a leftover `null` in there would otherwise reach a
+     * client that was promised `number | null`.
+     */
+    private function measured(string $field): ?int
+    {
+        $column = $this->resource->getAttribute($field);
+
+        if (is_numeric($column)) {
+            return (int) $column;
+        }
+
+        $kept = ($this->resource->custom_properties ?? [])[$field] ?? null;
+
+        return is_numeric($kept) ? (int) $kept : null;
     }
 
     /**

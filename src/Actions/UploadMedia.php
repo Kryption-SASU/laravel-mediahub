@@ -225,12 +225,43 @@ final class UploadMedia
             $dimensions = @getimagesize((string) $payload->localPath);
 
             if ($dimensions !== false) {
-                $attributes['width'] = $dimensions[0];
-                $attributes['height'] = $dimensions[1];
+                self::remember($attributes, 'width', (int) $dimensions[0]);
+                self::remember($attributes, 'height', (int) $dimensions[1]);
             }
         }
 
         return Media::create($attributes);
+    }
+
+    /**
+     * A MEASUREMENT THE SCHEMA HAS NOWHERE TO PUT IS NOT A MEASUREMENT TO THROW AWAY.
+     *
+     * ⚠️ AN ADOPTED SCHEMA MAY SIMPLY NOT HAVE THESE COLUMNS. The shipped `legacy` preset maps
+     * `width`, `height` and `duration` to `null` because the tables really do not carry them —
+     * and until now the value read off the file was computed, assigned, and quietly dropped. The
+     * screen then showed nothing where a size belongs, on every installation of that kind.
+     *
+     * ⚠️ IT GOES IN THE FREE-FORM PROPERTIES, WHICH EVERY SCHEMA HAS. That blob is the one place
+     * a host is expected to let a package keep what it learned, and the legacy mirror already
+     * merges into it rather than replacing it, so nothing overwrites this later.
+     *
+     * ⚠️ AND IT IS THE ORIGINAL THAT IS MEASURED, taken from the uploaded file before a single
+     * derivative exists. A thumbnail's dimensions are a fact about the thumbnail.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private static function remember(array &$attributes, string $field, int $value): void
+    {
+        if (Media::hasColumn($field)) {
+            $attributes[$field] = $value;
+
+            return;
+        }
+
+        $properties = (array) ($attributes['custom_properties'] ?? []);
+        $properties[$field] = $value;
+
+        $attributes['custom_properties'] = $properties;
     }
 
     private function realMimeType(string $path): string
