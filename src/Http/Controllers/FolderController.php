@@ -8,8 +8,10 @@ use Illuminate\Http\JsonResponse;
 use Kryption\MediaHub\Actions\CreateFolder;
 use Kryption\MediaHub\Actions\MoveFolder;
 use Kryption\MediaHub\Actions\RenameFolder;
+use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Http\Requests\FolderRequest;
 use Kryption\MediaHub\Http\Resources\FolderResource;
+use Kryption\MediaHub\Support\OwnerContext;
 use Kryption\MediaHub\Models\MediaFolder;
 use Kryption\MediaHub\Support\FolderLocator;
 
@@ -32,6 +34,7 @@ final class FolderController
         private readonly RenameFolder $rename,
         private readonly MoveFolder $move,
         private readonly FolderLocator $folders,
+        private readonly MediaOwner $owner,
     ) {
     }
 
@@ -39,7 +42,17 @@ final class FolderController
     {
         $parent = $this->folders->optional($request->input('parent'));
 
-        $folder = ($this->create)((string) $request->input('name'), $parent);
+        /*
+         * ⚠️ THE FOLDER BELONGS TO WHOEVER MADE IT, and nothing here used to say so. On the
+         * package's own tables that was a missing fact; on an adopted schema whose `user_id` is
+         * `NOT NULL` the insert is refused, and creating a folder through the API simply did not
+         * work — a constraint violation rather than a message.
+         */
+        $folder = ($this->create)(
+            (string) $request->input('name'),
+            $parent,
+            OwnerContext::for(MediaFolder::class, $this->owner),
+        );
 
         return (new FolderResource($folder->load('parent')))
             ->response()

@@ -25,12 +25,17 @@ final class FolderResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->getRouteKey(),
+            /*
+             * ⚠️ A STRING, WHATEVER THE DRIVER KEYS ON — see `MediaResource` for the whole of
+             * it. `standalone` keys on a `uuid`, the `legacy` preset on the host's integer `id`,
+             * and the published contract says `string` for both.
+             */
+            'id' => (string) $this->getRouteKey(),
             'name' => $this->name,
             'slug' => $this->slug,
             'path' => $this->path,
             'depth' => (int) $this->depth,
-            'parent_id' => $this->resource->parent?->getRouteKey(),
+            'parent_id' => MediaResource::key($this->resource->parent?->getRouteKey()),
             'trashed_at' => optional($this->deleted_at)->toAtomString(),
             'created_at' => optional($this->created_at)->toAtomString(),
             'updated_at' => optional($this->updated_at)->toAtomString(),

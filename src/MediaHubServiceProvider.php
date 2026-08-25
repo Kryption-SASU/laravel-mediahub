@@ -11,6 +11,7 @@ use Kryption\MediaHub\Support\Remote\AddressGuard;
 use Kryption\MediaHub\Contracts\RemoteFetcher;
 use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\AccessPolicy;
+use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Contracts\ConversionDriver;
 use Kryption\MediaHub\Contracts\DiskResolver;
 use Kryption\MediaHub\Contracts\FileNamer;
@@ -27,6 +28,7 @@ use Kryption\MediaHub\Support\Conversions\NullConversionDriver;
 use Kryption\MediaHub\Support\DeepUploadValidator;
 use Kryption\MediaHub\Support\DefaultPathGenerator;
 use Kryption\MediaHub\Support\MimeMediaTypeResolver;
+use Kryption\MediaHub\Support\AuthenticatedOwner;
 use Kryption\MediaHub\Support\NullScope;
 use Kryption\MediaHub\Support\ReuseDuplicates;
 use Kryption\MediaHub\Support\SingleDiskResolver;
@@ -275,6 +277,20 @@ class MediaHubServiceProvider extends ServiceProvider
                 ? $this->app->make($chosen)
                 : new ScopeIsTheBoundary();
         });
+
+        /*
+         * ⚠️ WHO IS ACTING, AND THE DEFAULT IS THE SIGNED-IN USER. Nothing used to answer this
+         * question at all: a file uploaded through the API and a folder created through it
+         * belonged to nobody, which on an adopted schema whose `user_id` is `NOT NULL` means the
+         * insert is refused and the feature simply does not work.
+         */
+        $this->bindIfAbsent(MediaOwner::class, function (): MediaOwner {
+            $chosen = $this->app['config']->get('mediahub.context.owner');
+
+            return is_string($chosen) && $chosen !== ''
+                ? $this->app->make($chosen)
+                : new AuthenticatedOwner($this->app['auth']);
+        });
     }
 
     /**
@@ -351,6 +367,7 @@ class MediaHubServiceProvider extends ServiceProvider
             ConversionDriver::class,
             UrlGenerator::class,
             AccessPolicy::class,
+            MediaOwner::class,
         ];
     }
 }
