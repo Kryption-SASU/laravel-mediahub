@@ -122,6 +122,7 @@ describe('the public surface of the components', () => {
             'MhMediaInput',
             'MhMediaLibrary',
             'MhMediaPicker',
+            'MhPager',
             'MhProvider',
             'MhQuotaMeter',
             'MhSelectionBar',

@@ -18,6 +18,7 @@ import MhEmptyState from './MhEmptyState.vue'
 import MhFolderCreator from './MhFolderCreator.vue'
 import MhFolderList from './MhFolderList.vue'
 import MhItemGrid from './MhItemGrid.vue'
+import MhPager from './MhPager.vue'
 import MhQuotaMeter from './MhQuotaMeter.vue'
 import MhSelectionBar from './MhSelectionBar.vue'
 import MhToolbar from './MhToolbar.vue'
@@ -174,6 +175,19 @@ async function open(folder: Folder | null): Promise<void> {
     focused.value = null
 
     await browser.open(folder)
+}
+
+/**
+ * ⚠️ A PAGE IS A PLACE, AND LEAVING IT LETS GO OF WHAT BELONGED TO IT. The selection would
+ * otherwise carry files nobody can see any more into a batch whose confirmation names a count
+ * rather than the files, and the details window would go on showing one the listing behind it no
+ * longer holds.
+ */
+async function goToPage(page: number): Promise<void> {
+    stopPicking()
+    focused.value = null
+
+    await browser.goToPage(page)
 }
 
 async function refreshAll(): Promise<void> {
@@ -380,6 +394,16 @@ function onFiltered(types: MediaType[]): void {
                         </template>
                     </MhItemGrid>
                 </MhDropzone>
+
+                <!-- ⚠️ THE LISTING WAS SILENTLY CUT UNTIL THIS EXISTED. The server paginated from
+                     the first day and no screen ever asked for a second page: a folder of three
+                     hundred files showed forty-eight and said nothing about the rest. -->
+                <MhPager
+                    :page="browser.page.value?.meta.current_page ?? 1"
+                    :pages="browser.page.value?.meta.last_page ?? 1"
+                    :total="browser.page.value?.meta.total ?? 0"
+                    @go="goToPage"
+                />
             </div>
 
         </div>

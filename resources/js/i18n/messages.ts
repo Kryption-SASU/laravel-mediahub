@@ -101,6 +101,14 @@ const en: MhMessages = {
 
     'menu.label': 'Actions',
 
+    'pages.label': 'Pages',
+    'pages.next': 'Next page',
+    'pages.previous': 'Previous page',
+    /* ⚠️ THE SIZE OF WHAT IS BEING LOOKED AT, not only the position in it. Knowing there are
+       312 items changes what somebody does next; "page 2 of 7" alone does not. */
+    'pages.summary': '{count} item|{count} items',
+    'pages.where': 'Page {page} of {pages}',
+
     'picker.cancel': 'Cancel',
     'picker.choose': 'Choose',
     'picker.empty': 'Nothing here',
@@ -223,6 +231,12 @@ const fr: MhMessages = {
     'library.noResults.title': 'Aucun résultat',
 
     'menu.label': 'Actions',
+
+    'pages.label': 'Pages',
+    'pages.next': 'Page suivante',
+    'pages.previous': 'Page précédente',
+    'pages.summary': '{count} élément|{count} éléments',
+    'pages.where': 'Page {page} sur {pages}',
 
     'picker.cancel': 'Annuler',
     'picker.choose': 'Choisir',
