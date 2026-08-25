@@ -69,6 +69,58 @@ export function provideMediaText(translator: MhTranslator): void {
 }
 
 /**
+ * THE LANGUAGE ITSELF, BESIDE THE TRANSLATOR — and it is not the same thing.
+ *
+ * ⚠️ A DATE IS NOT A TRANSLATABLE STRING. "12 août 2026, 14:03" is built by `Intl` from a
+ * language tag, and no catalogue of sentences can produce it: the order of the parts, the name
+ * of the month and the shape of the clock all come from the tag. The translator cannot hand one
+ * out — a host may have replaced it with `vue-i18n` — so the tag is provided on its own.
+ */
+export const mediaLocaleKey: InjectionKey<() => string | undefined> = Symbol('mediahub.locale')
+
+export function provideMediaLocale(locale: MaybeRefOrGetter<string | undefined>): void {
+    provide(mediaLocaleKey, () => toValue(locale))
+}
+
+/**
+ * ⚠️ IT ANSWERS `undefined` WHEN NOBODY SAID, and that is a usable answer: `Intl` then takes the
+ * runtime's own language. Throwing, or inventing `en`, would both be worse — the first breaks a
+ * component dropped onto a page to try it, the second prints American dates in a French
+ * application and looks like a bug in the library rather than a missing provider.
+ */
+export function useMediaLocale(): () => string | undefined {
+    const provided = inject(mediaLocaleKey, null)
+
+    return () => provided?.()
+}
+
+/**
+ * A LANGUAGE TAG `Intl` WILL ACCEPT, OR NOTHING.
+ *
+ * ⚠️ `Intl` THROWS A `RangeError` ON A TAG IT CANNOT PARSE, and `fr_FR` — the shape PHP and
+ * Laravel carry everywhere — is one of them: BCP 47 wants a hyphen. An uncaught throw here takes
+ * a whole panel down for the sake of a date, so the underscore is converted rather than
+ * discovered, and anything still unparseable falls back to the runtime's own language.
+ */
+export function intlLocale(tag: string | undefined): string | undefined {
+    if (tag === undefined || tag === '') {
+        return undefined
+    }
+
+    const normalised = tag.replace(/_/g, '-')
+
+    try {
+        return Intl.DateTimeFormat.supportedLocalesOf([normalised]).length > 0
+            ? normalised
+            : undefined
+    } catch {
+        /* ⚠️ `supportedLocalesOf` ITSELF THROWS on a structurally invalid tag — it is the check,
+         * and it is also the thing being checked. Anything it refuses to look at is not a tag. */
+        return undefined
+    }
+}
+
+/**
  * ⚠️ IT WORKS WITH NOTHING PROVIDED, in the package's own default language. A component dropped
  * into a page to try it out must render words rather than an exception — the same reasoning as
  * the theme, and for the same reason: the first thing anybody sees should be a screen.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultTheme } from './defaults'
 import { classesOf, mergeTheme } from './merge'
 import type { MhTheme } from './types'
 
@@ -89,5 +90,45 @@ describe('a host theme taking over', () => {
         mergeTheme(base, { thumbnail: { root: { class: 'mutated' } } })
 
         expect(base.thumbnail?.root?.class).toBe('rounded-md bg-slate-100')
+    })
+})
+
+describe('what the default skin has to carry itself', () => {
+    /**
+     * ⚠️ A MODAL `<dialog>` IS CENTRED BY THE BROWSER, AND TAILWIND TAKES THAT AWAY. The centring
+     * is `margin: auto` against `inset: 0` in the user-agent stylesheet; the preflight resets the
+     * margin of every element to zero, and the prompt lands in the top-left corner of the window.
+     * Nothing warns — the backdrop still appears, the focus trap still works, the box is simply
+     * in the wrong place. Seen on a real host on 25/08/2026.
+     *
+     * ⚠️ THE DIALOGS ARE FOUND RATHER THAN LISTED. `backdrop:` only applies to a dialog, so a
+     * fourth one added later is covered the day it is written — a hand-written list of three
+     * names would not be, and nobody would notice until a screenshot.
+     */
+    it('centres every dialog itself', () => {
+        const dialogs = Object.entries(defaultTheme).flatMap(([component, slots]) =>
+            Object.entries(slots)
+                .filter(([, style]) => (style.layout ?? '').includes('backdrop:'))
+                .map(([slot, style]) => [component + '.' + slot, style.layout ?? ''] as const),
+        )
+
+        expect(dialogs.length).toBeGreaterThan(0)
+
+        expect(
+            dialogs.filter(([, layout]) => !/\bm-auto\b/.test(layout)).map(([where]) => where),
+        ).toEqual([])
+    })
+
+    /**
+     * ⚠️ AND THE CENTRING IS STRUCTURE, NOT SKIN. A host replacing the surface of a dialog — its
+     * colour, its shadow, its radius — must not be able to lose the one class that puts it in
+     * the middle of the window.
+     */
+    it('keeps that centring out of a host theme\'s reach', () => {
+        const merged = mergeTheme(defaultTheme, {
+            confirmDialog: { root: { class: 'bg-white' } },
+        })
+
+        expect(classesOf(merged, 'confirmDialog', 'root')).toContain('m-auto')
     })
 })

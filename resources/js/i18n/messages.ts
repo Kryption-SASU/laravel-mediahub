@@ -39,18 +39,33 @@ const en: MhMessages = {
     'breadcrumb.root': 'All files',
 
     'details.alt': 'Alternative text',
+    'details.copied': 'Copied',
+    'details.copy': 'Copy',
+    'details.created': 'Uploaded at',
     'details.dimensions': 'Dimensions',
+    'details.empty': 'No selection',
+    'details.emptyHint': 'Choose a file to see and edit its details.',
     'details.name': 'Name',
     'details.save': 'Save',
     'details.size': 'Size',
     'details.type': 'Type',
+    'details.updated': 'Modified at',
+    'details.url': 'Full url',
+    'details.use': 'Use this file',
 
     'dialog.cancel': 'Cancel',
     'dialog.confirm': 'Confirm',
 
-    'dropzone.hint': 'Drop them here, or choose them from your computer.',
-    'dropzone.label': 'Add files',
+    /* ⚠️ THE WORDS OF A VEIL, NOT OF A BUTTON. This is what is shown over the listing while a
+       file is being held; the control that opens a file picker says `upload.label`. */
+    'dropzone.hint': 'They are added to the folder you are looking at.',
+    'dropzone.label': 'Drop to upload',
 
+    'folders.create': 'New folder',
+    'folders.create.cancel': 'Cancel',
+    'folders.create.name': 'Name',
+    'folders.create.submit': 'Create',
+    'folders.create.title': 'New folder',
     'folders.label': 'Folders',
 
     'gallery.add': 'Add files',
@@ -114,6 +129,8 @@ const en: MhMessages = {
     'types.image': 'Images',
     'types.other': 'Other',
     'types.video': 'Video',
+
+    'upload.label': 'Add files',
 }
 
 const fr: MhMessages = {
@@ -130,18 +147,31 @@ const fr: MhMessages = {
     'breadcrumb.root': 'Tous les fichiers',
 
     'details.alt': 'Texte alternatif',
+    'details.copied': 'Copié',
+    'details.copy': 'Copier',
+    'details.created': 'Ajouté le',
     'details.dimensions': 'Dimensions',
+    'details.empty': 'Aucune sélection',
+    'details.emptyHint': 'Choisissez un fichier pour voir et modifier ses informations.',
     'details.name': 'Nom',
     'details.save': 'Enregistrer',
     'details.size': 'Taille',
     'details.type': 'Type',
+    'details.updated': 'Modifié le',
+    'details.url': 'URL complète',
+    'details.use': 'Utiliser ce fichier',
 
     'dialog.cancel': 'Annuler',
     'dialog.confirm': 'Confirmer',
 
-    'dropzone.hint': 'Déposez-les ici, ou choisissez-les sur votre ordinateur.',
-    'dropzone.label': 'Ajouter des fichiers',
+    'dropzone.hint': 'Ils seront ajoutés au dossier affiché.',
+    'dropzone.label': 'Déposez pour envoyer',
 
+    'folders.create': 'Nouveau dossier',
+    'folders.create.cancel': 'Annuler',
+    'folders.create.name': 'Nom',
+    'folders.create.submit': 'Créer',
+    'folders.create.title': 'Nouveau dossier',
     'folders.label': 'Dossiers',
 
     'gallery.add': 'Ajouter des fichiers',
@@ -206,6 +236,8 @@ const fr: MhMessages = {
     'types.image': 'Images',
     'types.other': 'Autres',
     'types.video': 'Vidéos',
+
+    'upload.label': 'Ajouter des fichiers',
 }
 
 export const MH_LOCALES: Record<string, MhLocale> = {

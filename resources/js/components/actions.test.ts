@@ -1,11 +1,12 @@
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { h, nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import { MediaHubError } from '../client'
 import type { Selection } from '../client'
 import { fakeClient } from '../vue/fake.test-utils'
 import type { MhAction } from './actions'
 import MhContextMenu from './MhContextMenu.vue'
+import MhProvider from './MhProvider.vue'
 import MhSelectionBar from './MhSelectionBar.vue'
 import { useActionRunner } from './useActionRunner'
 
@@ -52,6 +53,44 @@ describe('one source for the actions', () => {
 
         expect(inMenu).toEqual(inBar)
         expect(inMenu.length).toBeGreaterThan(0)
+    })
+
+    /**
+     * ⚠️ THE WORDS COME FROM THE CATALOGUE, NOT FROM THE SOURCE. They used to be English strings
+     * typed into `defaultActions`, beside a catalogue that already carried `actions.trash`,
+     * `actions.restore` and `actions.purge` in every shipped language — written, and read by
+     * nobody. A French back-office ended up with exactly three English words on it, all of them
+     * on the menu that deletes files.
+     */
+    it('names its actions in the language it was given', () => {
+        const french = mount(MhProvider, {
+            props: { client: fakeClient(), locale: 'fr' },
+            slots: { default: h(MhContextMenu, { open: true, selection: one }) },
+            attachTo: document.body,
+        })
+
+        expect(labels(french, '[role="menuitem"]')).toEqual([
+            'Mettre à la corbeille',
+            'Restaurer',
+            'Supprimer définitivement',
+        ])
+    })
+
+    /** ⚠️ AND THE QUESTION ASKED BEFORE SOMETHING IRREVERSIBLE IS TRANSLATED TOO — it is the one
+     * sentence somebody actually reads before agreeing to lose a file. */
+    it('asks in that language as well', async () => {
+        const french = mount(MhProvider, {
+            props: { client: fakeClient(), locale: 'fr' },
+            slots: { default: h(MhContextMenu, { open: true, selection: one }) },
+            attachTo: document.body,
+        })
+
+        const purge = french.findAll('[role="menuitem"]')[2]
+
+        await purge?.trigger('click')
+        await nextTick()
+
+        expect(french.find('dialog').text()).toContain('Supprimer définitivement ?')
     })
 
     it('offers the host own additions in both, too', () => {

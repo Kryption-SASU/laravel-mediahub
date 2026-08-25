@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MediaHubClient } from '../client'
-import { createTranslator, provideMediaText } from '../i18n/context'
+import { createTranslator, provideMediaLocale, provideMediaText } from '../i18n/context'
 import type { MhTranslator } from '../i18n/context'
 import { provideMediaTheme } from '../theme/context'
 import type { MhThemeOverride } from '../theme/types'
@@ -41,6 +41,14 @@ provideMediaHub(props.client)
 provideMediaTheme(() => props.theme)
 
 provideMediaText(props.text ?? createTranslator(() => props.locale))
+
+/*
+ * ⚠️ PROVIDED EVEN WHEN THE HOST BROUGHT ITS OWN TRANSLATOR. A `vue-i18n` catalogue answers for
+ * the sentences; it says nothing about how this language writes a date, and `Intl` needs the tag
+ * to do that. Skipping it here would leave a French application printing American dates in the
+ * one panel that shows any.
+ */
+provideMediaLocale(() => props.locale)
 </script>
 
 <template>

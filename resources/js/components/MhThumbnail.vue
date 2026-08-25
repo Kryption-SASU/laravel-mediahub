@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { Media } from '../client'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
+import { GLYPH_BOX, TYPE_GLYPHS } from './glyphs'
 
 /**
  * ONE MEDIA, SHOWN SMALL.
@@ -71,8 +72,22 @@ const description = computed<string>(() => {
     return typeof declared === 'string' && declared !== '' ? declared : props.media.name
 })
 
-/** The marker when there is nothing to show: the extension, or the kind when there is none. */
-const marker = computed<string>(() => (props.media.extension ?? props.media.type).slice(0, 4))
+/**
+ * WHAT IS DRAWN WHEN THERE IS NOTHING TO SHOW: the kind, as a picture.
+ *
+ * ⚠️ THE KIND IS NEVER PRINTED AS A WORD ANY MORE. It used to be the first four letters of the
+ * extension, falling back to the kind — so a video with no extension rendered a tile with
+ * "VIDE" across it, which is a French word, and the wrong one.
+ */
+const glyph = computed<readonly string[]>(() => TYPE_GLYPHS[props.media.type])
+
+/**
+ * ⚠️ THE EXTENSION STAYS, BECAUSE THE GLYPH DOES NOT SAY EVERYTHING. Six kinds cover every file
+ * a server can send; "is this a PDF or a Word document" is the question actually being asked of
+ * a document tile, and only these three or four letters answer it. Absent, nothing is printed —
+ * an empty caption reserves a line for a word that never comes.
+ */
+const marker = computed<string>(() => props.media.extension ?? '')
 
 const dimensions = computed(() => {
     const size = typeof props.size === 'number' ? `${props.size}px` : props.size
@@ -93,8 +108,24 @@ const dimensions = computed(() => {
             @error="failed = true"
         />
         <span v-else :class="cls('fallback')" role="img" :aria-label="description || undefined">
-            <slot name="fallback" :media="media">
-                <span :class="cls('label')" aria-hidden="true">{{ marker }}</span>
+            <!-- ⚠️ THE SLOT COMES FIRST IN THE CONTRACT, not the drawing. A host with an icon set
+                 of its own replaces what is inside here; nothing about that requires forking the
+                 component, which is the whole reason the markup can stay frozen. -->
+            <slot name="fallback" :media="media" :glyph="glyph">
+                <svg
+                    :class="cls('icon')"
+                    :viewBox="GLYPH_BOX"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                >
+                    <path v-for="(drawing, step) in glyph" :key="step" :d="drawing" />
+                </svg>
+
+                <span v-if="marker" :class="cls('label')" aria-hidden="true">{{ marker }}</span>
             </slot>
         </span>
     </span>

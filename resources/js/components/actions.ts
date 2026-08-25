@@ -1,6 +1,8 @@
 import { computed, toValue } from 'vue'
 import type { ComputedRef, MaybeRefOrGetter } from 'vue'
 import type { MediaHubClient, Selection } from '../client'
+import { useMediaText } from '../i18n/context'
+import type { MhTranslator } from '../i18n/context'
 
 /**
  * WHAT CAN BE DONE TO A SELECTION, DESCRIBED AS DATA.
@@ -53,40 +55,47 @@ function isEmpty(selection: Selection): boolean {
 /**
  * THE ACTIONS THIS PACKAGE SHIPS.
  *
+ * ⚠️ THE TRANSLATOR IS AN ARGUMENT, AND IT IS REQUIRED. These labels used to be English strings
+ * typed here, beside a catalogue that already carried `actions.trash`, `actions.restore` and
+ * `actions.purge` in every shipped language — written, and read by nobody. The result was a
+ * French back-office whose only English words were the three on the menu that deletes files.
+ * Made optional, the same thing would happen again the first time somebody called this without
+ * one; required, the compiler asks.
+ *
  * ⚠️ EMPTYING THE TRASH IS NOT HERE, deliberately. It takes no selection, so a list keyed on one
  * would have to special-case it — and a special case in a shared list is how the two renderers
  * start to differ again.
  */
-export function defaultActions(client: MediaHubClient): MhAction[] {
+export function defaultActions(client: MediaHubClient, t: MhTranslator): MhAction[] {
     return [
         {
             id: 'trash',
-            label: 'Move to trash',
+            label: t('actions.trash'),
             destructive: true,
             confirm: {
-                title: 'Move to the trash?',
-                message: 'They can be restored from the trash afterwards.',
+                title: t('actions.trash.confirmTitle'),
+                message: t('actions.trash.confirmMessage'),
             },
             available: (selection) => !isEmpty(selection),
             run: (selection) => client.trash(selection),
         },
         {
             id: 'restore',
-            label: 'Restore',
+            label: t('actions.restore'),
             available: (selection) => !isEmpty(selection),
             run: (selection) => client.restore(selection),
         },
         {
             id: 'purge',
-            label: 'Delete permanently',
+            label: t('actions.purge'),
             destructive: true,
             /*
              * ⚠️ THE ONLY ACTION HERE THAT CANNOT BE UNDONE, and the wording of the question says
              * so rather than asking "are you sure?" — which is what everybody clicks through.
              */
             confirm: {
-                title: 'Delete permanently?',
-                message: 'This cannot be undone, and the files are removed from the storage.',
+                title: t('actions.purge.confirmTitle'),
+                message: t('actions.purge.confirmMessage'),
             },
             available: (selection) => !isEmpty(selection),
             run: (selection) => client.purge(selection),
@@ -103,8 +112,15 @@ export function useMediaActionList(
     selection: MaybeRefOrGetter<Selection>,
     extra?: MaybeRefOrGetter<MhAction[] | undefined>,
 ): UseMediaActionList {
+    /*
+     * ⚠️ READ INSIDE THE COMPUTED, NOT CAPTURED ONCE. The translator closes over the locale the
+     * provider holds, so calling it here is what makes the list follow a language switched at
+     * runtime — labels built at setup would stay in whatever language was current at mount.
+     */
+    const t = useMediaText()
+
     const all = computed<MhAction[]>(() => {
-        const merged = [...defaultActions(client)]
+        const merged = [...defaultActions(client, t)]
 
         for (const action of toValue(extra) ?? []) {
             const index = merged.findIndex((candidate) => candidate.id === action.id)

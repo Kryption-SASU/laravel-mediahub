@@ -194,7 +194,13 @@ selection is exactly what a confirmation is supposed to prevent.
 ## Uploading, on screen
 
 ```vue
-<MhDropzone @files="upload.add($event, { folder })" />
+<MhUploadButton @files="upload.add($event, { folder })" />
+
+<MhDropzone @files="upload.add($event, { folder })">
+    <MhFolderList :folders="folders" @open="open" />
+    <MhItemGrid :media="media" />
+</MhDropzone>
+
 <MhUploadQueue
     :items="upload.items.value"
     @abort="upload.abort($event)"
@@ -203,10 +209,19 @@ selection is exactly what a confirmation is supposed to prevent.
 />
 ```
 
-⚠️ **The dropzone carries a real `<input type="file">`, and that is not a fallback.**
-Dragging cannot be done from a keyboard, is awkward with a screen reader and is impossible on
-most touch devices — for a portion of your users the input is the only route, so it is a labelled
-control rather than something hidden behind a click handler.
+⚠️ **There are two routes, and one of them is not optional.** Dragging cannot be done from a
+keyboard, is awkward with a screen reader and is impossible on most touch devices — for a portion
+of your users a file picker is the only way in. `MhUploadButton` is that picker: a real, labelled
+`<input type="file">` whose label is the button, kept in the accessibility tree and in the tab
+order rather than hidden behind a click handler on a `display: none` element. **A screen that
+renders `MhDropzone` alone has to render one too**, or adding a file becomes something only a
+mouse can do.
+
+⚠️ **And the drop zone wraps the listing rather than sitting above it.** A dashed rectangle
+parked over the grid accepts a drop on its own few hundred pixels and nowhere else — so a file
+let go over the files, which is where the hand goes, is opened by the browser, taking the page
+and whatever was in it. Given children, the zone becomes the area somebody is actually looking
+at, and shows nothing at all until there is something to catch.
 
 Each file gets its own row and its own progress. One request per file means one can be refused —
 too large, a type nobody allows — while the rest land; a single bar for the batch would report

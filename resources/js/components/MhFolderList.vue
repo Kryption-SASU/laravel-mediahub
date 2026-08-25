@@ -4,6 +4,7 @@ import type { Folder } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
+import { FOLDER_GLYPH, GLYPH_BOX } from './glyphs'
 
 /**
  * THE FOLDERS INSIDE THE ONE BEING LOOKED AT.
@@ -44,9 +45,28 @@ const words = computed(() => ({
     <nav v-if="folders.length > 0" :class="cls('root')" :aria-label="words.label">
         <ul :class="cls('list')">
             <li v-for="folder in folders" :key="folder.id">
+                <!-- ⚠️ THE SAME TILE AS A FILE, ON PURPOSE. A row of pills above a grid of
+                     pictures reads as two unrelated things, and the first click somebody makes
+                     is on the breadcrumb rather than on the folder they can see. -->
                 <button type="button" :class="cls('item')" @click="$emit('open', folder)">
-                    <span :class="cls('icon')" aria-hidden="true">/</span>
-                    <span :class="cls('name')">{{ folder.name }}</span>
+                    <span :class="cls('preview')">
+                        <slot name="icon" :folder="folder">
+                            <svg
+                                :class="cls('icon')"
+                                :viewBox="GLYPH_BOX"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                            >
+                                <path v-for="(drawing, step) in FOLDER_GLYPH" :key="step" :d="drawing" />
+                            </svg>
+                        </slot>
+                    </span>
+
+                    <span :class="cls('name')" :title="folder.name">{{ folder.name }}</span>
                 </button>
             </li>
         </ul>
