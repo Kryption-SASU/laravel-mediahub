@@ -225,12 +225,50 @@ final class UploadMedia
             $dimensions = @getimagesize((string) $payload->localPath);
 
             if ($dimensions !== false) {
-                $attributes['width'] = $dimensions[0];
-                $attributes['height'] = $dimensions[1];
+                self::remember($attributes, 'width', (int) $dimensions[0]);
+                self::remember($attributes, 'height', (int) $dimensions[1]);
             }
         }
 
         return Media::create($attributes);
+    }
+
+    /**
+     * A MEASUREMENT THE SCHEMA HAS NOWHERE TO PUT IS NOT A MEASUREMENT TO THROW AWAY.
+     *
+     * ⚠️ AN ADOPTED SCHEMA MAY SIMPLY NOT HAVE THESE COLUMNS. The shipped `legacy` preset maps
+     * `width`, `height` and `duration` to `null` because the tables really do not carry them —
+     * and until now the value read off the file was computed, assigned, and quietly dropped. The
+     * screen then showed nothing where a size belongs, on every installation of that kind.
+     *
+     * ⚠️ IT GOES IN THE FREE-FORM PROPERTIES — WHERE THE SCHEMA HAS THEM. That is the one place
+     * a host is expected to let a package keep what it learned about a file, and it is merged
+     * into rather than replaced, so a mirror writing its own key there afterwards keeps both.
+     *
+     * ⚠️ AND A SCHEMA THAT HAS NEITHER KEEPS NOTHING — handled one layer down, not here. Writing
+     * to an absent column is ignored by the model, in silence and deliberately, so that a poorer
+     * schema cannot make a valid upload fail. A second check in this method was written and taken
+     * out again: no mutation could turn it red, because the model already held the rule. What
+     * cannot be kept is not kept, the screen then shows no size, and that is the truth rather
+     * than a defect — there is a bench for it either way.
+     *
+     * ⚠️ AND IT IS THE ORIGINAL THAT IS MEASURED, taken from the uploaded file before a single
+     * derivative exists. A thumbnail's dimensions are a fact about the thumbnail.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private static function remember(array &$attributes, string $field, int $value): void
+    {
+        if (Media::hasColumn($field)) {
+            $attributes[$field] = $value;
+
+            return;
+        }
+
+        $properties = (array) ($attributes['custom_properties'] ?? []);
+        $properties[$field] = $value;
+
+        $attributes['custom_properties'] = $properties;
     }
 
     private function realMimeType(string $path): string

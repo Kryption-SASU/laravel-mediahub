@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Kryption\MediaHub\Exceptions\StorageMisconfigured;
 use Kryption\MediaHub\Actions\CreateFolder;
+use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Contracts\MediaScope;
 use Kryption\MediaHub\Models\Media;
@@ -372,6 +373,199 @@ class TableBackendApiTest extends TestCase
         (require __DIR__.'/../../database/migrations-adopted/0001_01_01_000100_create_mediahub_conversions_table.php')->up();
 
         $this->assertSame(1, DB::table('mediahub_conversions')->count());
+    }
+
+    // ── What a selection carries, before anything is done to it ──────────────
+
+    /**
+     * ⚠️ A FOLDER IS NEVER JUST A FOLDER. Trashing and purging take the whole subtree — that is
+     * deliberate, and a folder deleted while its files stay visible would leave rows attached to
+     * an absent parent. But it means "delete 1 folder" can mean "delete 1 folder and four hundred
+     * files", and nothing could say so before the fact.
+     */
+    public function test_it_reports_what_a_folder_carries_all_the_way_down(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $root = $this->folder('Clients');
+        $child = $this->folder('Acme', $root);
+        $grandchild = $this->folder('Contracts', $child);
+
+        $this->media(['folder_id' => $child->getKey()]);
+        $this->media(['folder_id' => $grandchild->getKey()]);
+
+        $body = $this->postJson('/media/contents', ['folders' => [$root->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        /* ⚠️ THE WHOLE BRANCH: the folder itself, its child, its grandchild. */
+        $this->assertSame(3, $body['folders']);
+        $this->assertSame(2, $body['media']);
+    }
+
+    /** ⚠️ AND AN EMPTY BRANCH SAYS SO, rather than leaving the caller to guess from a zero. */
+    public function test_it_reports_a_folder_that_carries_nothing(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+
+        $body = $this->postJson('/media/contents', ['folders' => [$folder->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $body['folders']);
+        $this->assertSame(0, $body['media']);
+    }
+
+    /**
+     * ⚠️ A FILE TICKED DIRECTLY THAT ALSO SITS INSIDE A TICKED FOLDER IS ONE FILE. Added rather
+     * than unioned, the confirmation would name more than the action goes on to touch — and the
+     * one number somebody reads before destroying something would be wrong upwards.
+     */
+    public function test_it_counts_a_file_once_even_when_it_is_reached_twice(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+        $media = $this->media(['folder_id' => $folder->getKey()]);
+
+        $body = $this->postJson('/media/contents', [
+            'folders' => [$folder->getRouteKey()],
+            'media' => [$media->getRouteKey()],
+        ])->assertOk()->json('data');
+
+        $this->assertSame(1, $body['media']);
+    }
+
+    /** ⚠️ WHAT IS ALREADY IN THE TRASH COUNTS, because purging and restoring both act on it. */
+    public function test_it_counts_what_is_already_in_the_trash(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $folder = $this->folder('Clients');
+        $this->media(['folder_id' => $folder->getKey()])->delete();
+
+        $body = $this->postJson('/media/contents', ['folders' => [$folder->getRouteKey()]])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $body['media']);
+    }
+
+    // ── What the upload measured, on a schema with nowhere to put it ─────────
+
+    /**
+     * ⚠️ THE UPLOAD ALREADY MEASURED THE PICTURE, AND THE VALUE WENT NOWHERE. `getimagesize()` is
+     * called on the file as it lands, and the result was assigned to `width` and `height` — two
+     * logical columns this preset maps to `null`, because the adopted tables really do not carry
+     * them. Computed, assigned, dropped: the screen then showed nothing where a size belongs, on
+     * every installation of this kind.
+     *
+     * ⚠️ AND IT IS THE ORIGINAL THAT IS MEASURED, from the uploaded file before a single
+     * derivative exists. A thumbnail's dimensions are a fact about the thumbnail.
+     */
+    public function test_it_keeps_the_size_it_measured_where_the_schema_has_room(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $measured = getimagesize($path);
+
+        $body = $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful()->json('data');
+
+        $this->assertFalse(Media::hasColumn('width'));
+        $this->assertSame($measured[0], $body[0]['width']);
+        $this->assertSame($measured[1], $body[0]['height']);
+    }
+
+    /** ⚠️ AND IT COMES BACK ON THE NEXT READ, not only in the answer to the upload. */
+    public function test_the_size_survives_the_round_trip(): void
+    {
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful();
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertIsInt($body['media'][0]['width']);
+        $this->assertIsInt($body['media'][0]['height']);
+    }
+
+    /**
+     * ⚠️ A FILE THAT WAS THERE BEFORE STAYS WITHOUT ONE, and the screen leaves the row out rather
+     * than printing an empty size. Nothing is measured retroactively: the bytes would have to be
+     * read again, one object at a time, for a fact nobody asked for.
+     */
+    public function test_a_file_that_was_never_measured_reports_no_size(): void
+    {
+        $this->media(['mime_type' => 'image/png']);
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertNull($body['media'][0]['width']);
+        $this->assertNull($body['media'][0]['height']);
+    }
+
+    /**
+     * ⚠️ A SCHEMA WITH NEITHER PLACE KEEPS NOTHING, AND THE UPLOAD STILL WORKS. Not every adopted
+     * schema has a free-form column: a host may map `custom_properties` to `null` the same way
+     * this preset maps `width` to `null`, because the table simply has no such column. Writing
+     * there is ignored in silence — deliberately, so a poorer schema cannot make a valid upload
+     * fail — so what has to be checked is that the file still lands, and that the answer says no
+     * size rather than inventing one.
+     */
+    public function test_a_schema_with_nowhere_at_all_keeps_no_size_and_still_accepts_the_file(): void
+    {
+        /* ⚠️ THE WHOLE FILE MAP, BECAUSE THAT IS WHAT NAMING IT MEANS. The deep merge goes one
+         * level down, so `map.files` replaces the preset's rather than merging into it — which
+         * is exactly how a host loses thirty-nine columns while correcting one. */
+        $preset = require __DIR__.'/../../config/presets/legacy.php';
+
+        config()->set('mediahub.backend.map.files', array_merge(
+            $preset['map']['files'],
+            ['custom_properties' => null],
+        ));
+
+        HostSchema::flush();
+
+        $this->actingAs(new LegacyUser(['id' => 42]));
+
+        $path = tempnam(sys_get_temp_dir(), 'mh');
+        file_put_contents($path, SampleImages::bytes('image/png'));
+
+        $body = $this->post('/media', [
+            'files' => [new UploadedFile($path, 'photo.png', 'image/png', null, true)],
+        ])->assertSuccessful()->json('data');
+
+        $this->assertFalse(Media::hasColumn('custom_properties'));
+        $this->assertCount(1, $body);
+        $this->assertNull($body[0]['width']);
+    }
+
+    /**
+     * ⚠️ THE PROPERTIES ARE FREE-FORM AND HOSTS WRITE IN THEM TOO. Anything in there that is not
+     * a number must not reach a client that was promised one.
+     */
+    public function test_it_refuses_to_report_a_size_that_is_not_one(): void
+    {
+        $media = $this->media(['mime_type' => 'image/png']);
+        $media->custom_properties = ['width' => 'wide', 'height' => null];
+        $media->save();
+
+        $body = $this->getJson('/media')->assertOk()->json('data');
+
+        $this->assertNull($body['media'][0]['width']);
+        $this->assertNull($body['media'][0]['height']);
     }
 
     // ── Who owns what the API creates ────────────────────────────────────────

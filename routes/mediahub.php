@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Kryption\MediaHub\Http\Controllers\ArchiveController;
 use Kryption\MediaHub\Http\Controllers\BrowseController;
+use Kryption\MediaHub\Http\Controllers\ContentsController;
 use Kryption\MediaHub\Http\Controllers\DownloadController;
 use Kryption\MediaHub\Http\Controllers\FolderController;
 use Kryption\MediaHub\Http\Controllers\MediaController;
@@ -50,6 +51,13 @@ Route::patch('folders/{folder}', [FolderController::class, 'update'])->name('fol
  * off beyond a few hundred items.
  */
 Route::post('archive', [ArchiveController::class, 'store'])->name('archive');
+
+/*
+ * ⚠️ A `POST` FOR A READ, for the same reason as the archive above: the selection does not
+ * fit in a query string. It answers what a selection actually carries — a folder's subtree
+ * included — so a confirmation can name it before anything is destroyed.
+ */
+Route::post('contents', ContentsController::class)->name('contents');
 
 Route::post('trash', [TrashController::class, 'store'])->name('trash.store');
 Route::post('trash/restore', [TrashController::class, 'restore'])->name('trash.restore');

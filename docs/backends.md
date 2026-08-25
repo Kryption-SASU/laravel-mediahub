@@ -113,7 +113,7 @@ overridden on top, column by column.
 'backend' => [
     'driver' => 'table',
     'preset' => 'legacy',
-    'columns' => [
+    'map' => [
         'files' => ['name' => 'title'],
     ],
 ],
@@ -121,6 +121,14 @@ overridden on top, column by column.
 
 A column mapped to `null` means **it does not exist in this schema**, and whatever depends on it
 knows.
+
+⚠️ **`map.files` replaces the preset's file map whole, it does not merge into it.** The deep merge
+goes one level down — `map`, `tables`, `visibility` — so naming `files` there means naming every
+column of it. Correcting one and losing the other thirty-nine is a mistake that shows up as a
+query against a column that does not exist, on the first screen.
+
+⚠️ **And the key is `map`, not `columns`.** This page said `columns` until 25/08/2026, which the
+code has never read: a host following it overrode nothing at all, and nothing anywhere said so.
 
 ---
 
