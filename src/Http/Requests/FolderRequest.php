@@ -6,6 +6,7 @@ namespace Kryption\MediaHub\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Kryption\MediaHub\Contracts\AccessPolicy;
+use Kryption\MediaHub\Http\Requests\Concerns\NormalisesKeys;
 use Kryption\MediaHub\Models\MediaFolder;
 
 /**
@@ -20,6 +21,18 @@ use Kryption\MediaHub\Models\MediaFolder;
  */
 final class FolderRequest extends FormRequest
 {
+    use NormalisesKeys;
+
+    /**
+     * ⚠️ THE PARENT IS A KEY IN ITS DECLARED FORM. Under the `legacy` preset it is the host's
+     * integer `id`, so creating a folder inside another — the client sending back the key it was
+     * given — answered 422 while creating one at the root worked.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->normaliseKeys(['parent']);
+    }
+
     public function authorize(): bool
     {
         $folder = $this->route('folder');

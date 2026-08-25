@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kryption\MediaHub\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Kryption\MediaHub\Http\Requests\Concerns\NormalisesKeys;
 use Kryption\MediaHub\ValueObjects\ItemSelection;
 
 /**
@@ -23,9 +24,21 @@ use Kryption\MediaHub\ValueObjects\ItemSelection;
  */
 final class SelectionRequest extends FormRequest
 {
+    use NormalisesKeys;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * ⚠️ THE KEYS ARE PUT IN THEIR DECLARED FORM BEFORE THEY ARE JUDGED. Under the `legacy`
+     * preset the route key is the host's integer `id`, so a client returning what this very API
+     * handed it sends numbers — and every operation carrying a selection answered 422.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->normaliseKeys(['media', 'folders']);
     }
 
     /**

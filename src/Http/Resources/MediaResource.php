@@ -36,7 +36,14 @@ final class MediaResource extends JsonResource
         $urls = app(UrlGenerator::class);
 
         return [
-            'id' => $this->getRouteKey(),
+            /*
+             * ⚠️ A STRING, WHATEVER THE DRIVER KEYS ON. `standalone` keys on a `uuid` and the
+             * `legacy` preset on the host's integer `id`; left uncast, the same field is a
+             * string on one installation and a number on another, and the published contract —
+             * which says `id: string` — is only true on one of them. The suite never caught it
+             * because it only ever runs `standalone`, where the cast changes nothing.
+             */
+            'id' => (string) $this->getRouteKey(),
             'name' => $this->name,
             'file_name' => $this->file_name,
             'extension' => $this->extension,
@@ -53,7 +60,7 @@ final class MediaResource extends JsonResource
              * and go is not a contract. The price is that callers MUST load the relation — they
              * all do.
              */
-            'folder_id' => $this->resource->folder?->getRouteKey(),
+            'folder_id' => self::key($this->resource->folder?->getRouteKey()),
             'custom_properties' => $this->custom_properties ?? [],
             'url' => $urls->url($this->resource),
             'download_url' => $urls->downloadUrl($this->resource),
@@ -62,6 +69,16 @@ final class MediaResource extends JsonResource
             'created_at' => optional($this->created_at)->toAtomString(),
             'updated_at' => optional($this->updated_at)->toAtomString(),
         ];
+    }
+
+    /**
+     * ⚠️ A KEY IS A STRING, AND THE ABSENCE OF ONE STAYS `null`. Casting the absence would send
+     * `""` where the client reads "this media is at the root", and an empty string is a key it
+     * would then hand back on the next write.
+     */
+    public static function key(mixed $value): ?string
+    {
+        return $value === null ? null : (string) $value;
     }
 
     /**

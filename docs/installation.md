@@ -41,9 +41,49 @@ The package appears in the list of loaded providers.
 
 ---
 
+## Migrating — and why the order matters
+
+The package **loads its own migrations**; there is nothing to publish for them to run. Which
+ones it loads depends on `backend.driver`:
+
+| Driver | What `php artisan migrate` creates |
+| --- | --- |
+| `standalone` (default) | `mediahub_files`, `mediahub_folders`, `mediahub_conversions`, `mediahub_mediables` |
+| `table` | `mediahub_conversions`, and nothing else — your own tables are left alone |
+| `table`, with the conversions table set to `null` | nothing at all |
+
+⚠️ **Choose the driver before the first `migrate`.** The default is `standalone`, and the
+configuration is not published by itself: until you publish it and say otherwise, the package
+believes it owns the schema. So the ordinary order — install, migrate, then configure — runs the
+standalone migrations against a host that was going to adopt its own tables.
+
+Three of the four tables that creates are simply never read again, and they are harmless. The
+fourth is not, and that is the part worth knowing: **`mediahub_conversions` is needed in both
+modes and named the same in both**. In `standalone` it is created with a foreign key onto
+`mediahub_files`; under `table` the media live in *your* table, so that key points at rows which
+will never exist, and every derivative insert fails — on an upload, days after the migration
+that caused it.
+
+So, in order:
+
+```bash
+composer require kryption/laravel-mediahub
+php artisan vendor:publish --tag=mediahub-config   # decide backend.driver here
+php artisan migrate
+```
+
+**If it already happened**, nothing is lost. The next `migrate` takes the leftover conversions
+table over — it drops it and recreates it in the shape this mode needs — *provided it is
+empty*. If it holds rows, it refuses and says so: those rows are the standalone library's
+derivatives, and deciding what they are worth is not a migration's job. The three unused tables
+are left where they are; drop them yourself once you are sure nothing reads them.
+
+---
+
 ## Publishing the configuration
 
-Only if you want to change something:
+Publish it before you migrate if you are going to run in `table` mode, or at any time if you
+only want to change a setting:
 
 ```bash
 php artisan vendor:publish --tag=mediahub-config
@@ -51,6 +91,19 @@ php artisan vendor:publish --tag=mediahub-config
 
 The file lands in `config/mediahub.php`. Every setting is commented with **the reason** for its
 default, not just its value.
+
+The migrations can be published too, if you want to read them or run them by hand:
+
+```bash
+php artisan vendor:publish --tag=mediahub-migrations
+```
+
+⚠️ **A published copy shadows ours, silently.** The migrator keys files by name and the
+application's own path is read last, so `database/migrations/0001_01_01_000000_create_mediahub_tables.php`
+replaces the package's file of that name rather than running beside it — which is what makes
+editing a published migration work at all. The price is that the package can never update that
+migration again on your installation, and nothing will say so. Publish them to read them, or to
+take ownership deliberately; delete the copy when you only wanted a look.
 
 ---
 
