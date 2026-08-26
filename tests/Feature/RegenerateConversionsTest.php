@@ -270,6 +270,38 @@ class RegenerateConversionsTest extends TestCase
         $this->assertSame(0, MediaConversion::query()->count());
     }
 
+    /**
+     * ⚠️ THE TYPE IS NOT A COLUMN EVERYWHERE, and asking for one in SQL killed the command
+     * outright. It is derived from the MIME type, and the shipped `legacy` preset maps it to
+     * nothing at all: the query raised `column_absent_in_host_schema: type` before a single file
+     * was looked at. Measured on a real installation, running exactly the command the
+     * documentation suggests.
+     */
+    public function test_the_command_can_be_narrowed_to_a_type(): void
+    {
+        $photo = $this->upload(SampleImages::bytes('image/png'), 'photo.png');
+        $note = $this->upload('a plain note', 'notes.txt');
+
+        MediaConversion::query()->delete();
+
+        $this->artisan('mediahub:conversions', ['--type' => ['image']])->assertSuccessful();
+
+        $this->assertSame(1, MediaConversion::query()->where('media_id', $photo->getKey())->count());
+        $this->assertSame(0, MediaConversion::query()->where('media_id', $note->getKey())->count());
+    }
+
+    /** ⚠️ AND A TYPE NOBODY ASKED FOR BUILDS NOTHING, rather than everything. */
+    public function test_a_type_that_matches_nothing_builds_nothing(): void
+    {
+        $this->upload(SampleImages::bytes('image/png'), 'photo.png');
+
+        MediaConversion::query()->delete();
+
+        $this->artisan('mediahub:conversions', ['--type' => ['audio']])->assertSuccessful();
+
+        $this->assertSame(0, MediaConversion::query()->count());
+    }
+
     /** ⚠️ AND IT STOPS WHERE IT WAS TOLD TO, so a first run on a large library can be a sample. */
     public function test_the_command_stops_at_the_limit(): void
     {

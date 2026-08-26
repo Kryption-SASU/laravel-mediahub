@@ -83,16 +83,29 @@ final class BuildConversions extends Command
             $query->where('scope_key', $narrowed);
         }
 
-        if ($types !== []) {
-            $query->whereIn(Media::column('type'), $types);
-        }
+        /*
+         * ⚠️ THE TYPE IS NOT A WHERE CLAUSE, BECAUSE IT IS NOT ALWAYS A COLUMN. It is derived
+         * from the MIME type by {@see \Kryption\MediaHub\Contracts\MediaTypeResolver}, and the
+         * shipped `legacy` preset maps it to nothing at all: asked for one in SQL, the query
+         * raises `column_absent_in_host_schema: type` and the command dies before doing anything.
+         * Measured on a real installation, running exactly the command the documentation
+         * suggests.
+         *
+         * ⚠️ SO IT IS FILTERED IN THE LOOP, which walks every row either way — `--missing`
+         * already does — and works on every schema this package supports rather than on the one
+         * it was written against.
+         */
 
         $query->chunkById(self::CHUNK, function ($media) use (
-            $drivers, $generate, $limit, &$done, &$skipped, &$impossible
+            $drivers, $generate, $limit, $types, &$done, &$skipped, &$impossible
         ): bool {
             foreach ($media as $one) {
                 if ($limit > 0 && $done >= $limit) {
                     return false;
+                }
+
+                if ($types !== [] && ! in_array($one->mediaType()->value, $types, true)) {
+                    continue;
                 }
 
                 $type = (string) $one->mime_type;
