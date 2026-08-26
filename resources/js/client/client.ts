@@ -1,5 +1,6 @@
 import { MediaHubError } from './errors'
 import type {
+    ArchiveProgress,
     HealthReport,
     AffectedCount,
     SelectionContents,
@@ -61,6 +62,9 @@ export interface MediaHubClient {
     quota(): Promise<Quota>
 
     archiveRequest(selection: Selection, name?: string): ArchiveRequest
+
+    /** How far an archive has got, asked from outside the request writing it. */
+    archiveProgress(ticket: string): Promise<ArchiveProgress>
 
     /**
      * The health report, when the host has turned it on.
@@ -280,13 +284,39 @@ export function createMediaHubClient(options: MediaHubClientOptions): MediaHubCl
          * response natively, one chunk at a time.
          */
         archiveRequest(selection: Selection, name?: string): ArchiveRequest {
-            const fields = selectionBody(selection)
+            /*
+             * ⚠️ THE BRACKETS ARE DECIDED HERE, BECAUSE ONLY THIS FILE KNOWS THE CONTRACT.
+             * `media[]` is what makes PHP read repeated fields as a list; `name` must NOT carry
+             * them, or the server receives `['medias.zip']` where it expects a string. The form
+             * that writes these has no way to tell one from the other, and adding them to
+             * everything is what it used to do — silently, on a field nothing exercised.
+             */
+            const fields: Record<string, string[]> = {}
+
+            if (selection.media !== undefined) {
+                fields['media[]'] = [...selection.media]
+            }
+
+            if (selection.folders !== undefined) {
+                fields['folders[]'] = [...selection.folders]
+            }
 
             if (name !== undefined) {
                 fields['name'] = [name]
             }
 
             return { url: url('archive'), fields }
+        },
+
+        /**
+         * ⚠️ ASKED OF A SECOND REQUEST, BECAUSE THE FIRST ONE IS BUSY. The process streaming the
+         * ZIP is the only one that knows how far it has got, and it will not be free to answer
+         * until it has finished — by which time nobody needs telling. It leaves the number where
+         * this can pick it up.
+         */
+        async archiveProgress(ticket: string): Promise<ArchiveProgress> {
+            return (await request<{ data: ArchiveProgress }>('GET', `archive/progress/${ticket}`))
+                .data
         },
     }
 }

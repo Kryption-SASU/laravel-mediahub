@@ -205,11 +205,16 @@ export const defaultTheme: MhTheme = {
          * an overlay that swallows the pointer says so without a `disabled` on four controls.
          */
         busy: {
-            layout: 'absolute inset-0 z-20 flex items-center justify-center rounded-md',
+            layout: 'absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-md',
             class: 'bg-black/55 text-white',
         },
         spinner: {
             layout: 'h-7 w-7 animate-spin',
+            class: '',
+        },
+        /* ⚠️ TABULAR FIGURES, so the number does not shuffle sideways as it counts. */
+        busyLabel: {
+            layout: 'text-xs font-medium tabular-nums',
             class: '',
         },
         /*
@@ -1082,11 +1087,16 @@ export const defaultTheme: MhTheme = {
         /* ⚠️ THE SAME MARK AS A FILE'S. Two spinners of different shapes on one screen, for
          * one act, read as two different things happening. */
         busy: {
-            layout: 'absolute inset-0 z-20 flex items-center justify-center rounded-md',
+            layout: 'absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 rounded-md',
             class: 'bg-black/55 text-white',
         },
         spinner: {
             layout: 'h-7 w-7 animate-spin',
+            class: '',
+        },
+        /* ⚠️ TABULAR FIGURES, so the number does not shuffle sideways as it counts. */
+        busyLabel: {
+            layout: 'text-xs font-medium tabular-nums',
             class: '',
         },
         /* ⚠️ THE LIST ITEM CARRIES THE POSITIONING, because the tile is a button and the menu

@@ -77,6 +77,7 @@ const emit = defineEmits<{
      * the screen knows the opposite. Neither can show the wait alone.
      */
     busy: [selection: Selection | null]
+    progress: [seen: { done: number; total: number } | null]
 }>()
 
 const cls = useMediaTheme('contextMenu', () => props.ui)
@@ -113,6 +114,14 @@ const runner = useActionRunner(
 watch(
     () => runner.busy.value,
     (selection) => emit('busy', selection),
+)
+
+/* ⚠️ THE FIGURE TRAVELS THE SAME WAY THE MARK DOES, and for the same reason: the
+ * runner clears it in a finally, including after a failure. Emitted from the handler it
+ * would stay on the screen once the act had gone. */
+watch(
+    () => runner.progress.value,
+    (seen) => emit('progress', seen),
 )
 
 const root = ref<HTMLElement | null>(null)

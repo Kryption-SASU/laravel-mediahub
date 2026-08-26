@@ -942,6 +942,142 @@ describe('asking for an archive', () => {
     })
 
     /**
+     * ⚠️ THE ANSWER BEGINNING IS NOT THE ARCHIVE ENDING, AND CONFLATING THEM WAS THE FAULT
+     * REPORTED FROM A REAL SCREEN. The mark says the server has started replying, which happens
+     * within a second; the download then runs for as long as it runs. Read as "finished", the
+     * overlay came off after a second while the ZIP was still coming down.
+     *
+     * ⚠️ SO ONCE THE SERVER IS COUNTING, THE MARK STOPS DECIDING. It stays as the fallback for a
+     * host whose count cannot be reached at all — there, "it has begun" is the only thing anyone
+     * will ever know, and it still beats a spinner nobody can stop.
+     */
+    it('keeps waiting while the server is still writing, mark or no mark', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const api = fakeClient()
+
+            api.answerProgress({ known: true, total: 1000, written: 120, done: false })
+
+            /* The response has begun: the mark is set, exactly as the server sets it. */
+            HTMLFormElement.prototype.submit = function (): void {
+                started()
+            }
+
+            const selection = { folders: ['f1'] }
+            let settled = false
+
+            void actionOn(api, 'archive', selection)
+                .run(selection)
+                .then(() => {
+                    settled = true
+                })
+
+            await vi.advanceTimersByTimeAsync(3_000)
+
+            expect(settled).toBe(false)
+
+            api.answerProgress({ known: true, total: 1000, written: 1000, done: true })
+
+            await vi.advanceTimersByTimeAsync(1_000)
+
+            expect(settled).toBe(true)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ AND A COUNT THAT GOES QUIET IS NOT AN ARCHIVE THAT HAS FINISHED. The record it is read
+     * from expires; a download that outlives it would find the mark still set and stop the wait
+     * on it — which is the old fault returning by the back door, and only on the long archives
+     * where it hurts most. Once the server has been heard from, the mark stops deciding for good.
+     */
+    it('does not fall back on the mark once the count has spoken', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const api = fakeClient()
+
+            api.answerProgress({ known: true, total: 1000, written: 120, done: false })
+            HTMLFormElement.prototype.submit = function (): void {
+                started()
+            }
+
+            const selection = { folders: ['f1'] }
+            let settled = false
+
+            void actionOn(api, 'archive', selection)
+                .run(selection)
+                .then(() => {
+                    settled = true
+                })
+
+            await vi.advanceTimersByTimeAsync(1_000)
+
+            /* The record has expired: the server no longer has anything to say about it. */
+            api.answerProgress(null)
+
+            await vi.advanceTimersByTimeAsync(3_000)
+
+            expect(settled).toBe(false)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /** ⚠️ AND THE FIGURE IS PASSED ON, or the bar has nothing to draw. */
+    it('says how far along the server has got', async () => {
+        vi.useFakeTimers()
+
+        try {
+            const api = fakeClient()
+
+            api.answerProgress({ known: true, total: 800, written: 200, done: false })
+            HTMLFormElement.prototype.submit = function (): void {}
+
+            const selection = { folders: ['f1'] }
+            const seen: Array<[number, number]> = []
+
+            void actionOn(api, 'archive', selection).run(selection, (done, total) => {
+                seen.push([done, total])
+            })
+
+            await vi.advanceTimersByTimeAsync(1_000)
+
+            expect(seen[0]).toEqual([200, 800])
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    /**
+     * ⚠️ THE TICKET IS WHAT MAKES ANY OF IT POSSIBLE, and it is a scalar. Written `ticket[]` it
+     * reaches the server as a one-element array, which is not a string, which is silently no
+     * ticket at all — and then no count, for ever, on a screen that looks exactly the same.
+     */
+    it('carries a ticket, and carries it as a scalar', async () => {
+        const submitted: HTMLFormElement[] = []
+
+        HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
+            submitted.push(this)
+            started()
+        }
+
+        const selection = { folders: ['f1'] }
+
+        await actionOn(fakeClient(), 'archive', selection).run(selection)
+
+        const names = [...(submitted[0]?.querySelectorAll('input') ?? [])].map((one) => one.name)
+
+        expect(names).toContain('ticket')
+        expect(names).not.toContain('ticket[]')
+
+        /* ⚠️ WHILE THE LISTS KEEP THEIRS. The two rules live side by side, so one test holds both. */
+        expect(names).toContain('folders[]')
+    })
+
+    /**
      * ⚠️ A MARK LEFT OVER FROM BEFORE IS NOT AN ANSWER TO THIS QUESTION. It survives a reload and
      * a second tab, so without clearing it first the very next archive settles the moment it is
      * asked for — before the server has been reached at all. The spinner would come off

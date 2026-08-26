@@ -12,6 +12,7 @@ use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\MediaScope;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaFolder;
+use Kryption\MediaHub\Support\ArchiveProgress;
 use Kryption\MediaHub\Support\ServerRuntime;
 use Kryption\MediaHub\Tests\Fixtures\ZipReader;
 use Kryption\MediaHub\Tests\TestCase;
@@ -484,6 +485,118 @@ class ArchiveApiTest extends TestCase
             $source,
             'The browser is watching for a different cookie than the one the server sets.',
         );
+    }
+
+    // ── How far it has got ───────────────────────────────────────────────────
+
+    private const TICKET = 'abcd1234abcd1234';
+
+    /**
+     * ⚠️ THE ONLY PROGRESS ANYBODY CAN SHOW IS THE SERVER'S. The browser tells a page nothing
+     * about a download it has taken over, so what is counted here is what goes into the archive
+     * — and it has to leave the request to be read at all, since the request that knows is the
+     * one still streaming.
+     */
+    public function test_it_says_how_far_the_archive_has_got(): void
+    {
+        $media = $this->media(contents: str_repeat('x', 4096));
+
+        $this->post('/media/archive', ['media' => [$media->uuid], 'ticket' => self::TICKET])
+            ->assertOk()
+            ->streamedContent();
+
+        $seen = $this->app->make(ArchiveProgress::class)->read(self::TICKET);
+
+        $this->assertNotNull($seen);
+        $this->assertSame(4096, $seen['total']);
+
+        /* ⚠️ THE BYTES ARE COUNTED, not merely the total repeated back. Publishing the weight as
+         * though it had been written would draw a full bar over an archive that never read a
+         * file — and there is no other sign of that from outside. */
+        $this->assertSame(4096, $seen['written']);
+        $this->assertTrue($seen['done']);
+    }
+
+    /**
+     * ⚠️ ANNOUNCED BEFORE THE FIRST BYTE, so that a page asking early is told "nothing yet"
+     * rather than "no such archive". The two are the same status code and opposite instructions:
+     * one says keep waiting, the other says give up on a download that is about to start.
+     */
+    public function test_the_archive_is_announced_before_it_is_streamed(): void
+    {
+        $media = $this->media();
+
+        /* ⚠️ THE RESPONSE IS NOT CONSUMED HERE, and that is the assertion. Nothing has been
+         * streamed at this point; the record must already exist. */
+        $this->post('/media/archive', ['media' => [$media->uuid], 'ticket' => self::TICKET])->assertOk();
+
+        $seen = $this->app->make(ArchiveProgress::class)->read(self::TICKET);
+
+        $this->assertNotNull($seen);
+        $this->assertFalse($seen['done']);
+    }
+
+    /** ⚠️ AND WHAT NOBODY ASKED TO WATCH IS NOT WATCHED — the count costs a call per block. */
+    public function test_an_archive_nobody_is_watching_leaves_no_trace(): void
+    {
+        $media = $this->media();
+
+        $this->post('/media/archive', ['media' => [$media->uuid]])->assertOk()->streamedContent();
+
+        $this->assertNull($this->app->make(ArchiveProgress::class)->read(self::TICKET));
+    }
+
+    /**
+     * ⚠️ THE TICKET ENDS UP INSIDE A CACHE KEY, so it is never taken as it arrives. Unchecked, it
+     * is a way to write wherever that key namespace reaches — and it arrives in a request body,
+     * from whoever asked.
+     */
+    public function test_a_ticket_that_is_not_one_is_not_written_anywhere(): void
+    {
+        $media = $this->media();
+
+        $this->post('/media/archive', ['media' => [$media->uuid], 'ticket' => 'mediahub:*'])
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertNull($this->app->make(ArchiveProgress::class)->read('mediahub:*'));
+    }
+
+    /**
+     * ⚠️ ASKED OF THE STORE ITSELF, because asking through `read` proves nothing: it turns the
+     * same ticket down on the way out, so the bench would pass with the store full of whatever
+     * anybody sent. What is asserted is that the key was never written.
+     */
+    public function test_a_ticket_that_is_not_one_never_reaches_the_store(): void
+    {
+        $refused = 'not a ticket';
+
+        $this->app->make(ArchiveProgress::class)->start($refused, 1000);
+
+        $this->assertNull($this->app->make('cache')->get('mediahub:archive:'.$refused));
+    }
+
+    public function test_the_progress_can_be_asked_for_from_outside(): void
+    {
+        $this->app->make(ArchiveProgress::class)->start(self::TICKET, 1000);
+
+        $this->getJson('/media/archive/progress/'.self::TICKET)
+            ->assertOk()
+            ->assertJsonPath('data.known', true)
+            ->assertJsonPath('data.total', 1000)
+            ->assertJsonPath('data.done', false);
+    }
+
+    /**
+     * ⚠️ "NEVER HEARD OF IT" IS AN ANSWER, NOT AN ERROR. A page can ask before its archive
+     * request has been received; answering 404 would have it treat a download that is about to
+     * start as one that failed.
+     */
+    public function test_an_archive_nobody_has_heard_of_is_not_an_error(): void
+    {
+        $this->getJson('/media/archive/progress/zzzz9999zzzz9999')
+            ->assertOk()
+            ->assertJsonPath('data.known', false);
     }
 
     // ── The time the stream gives itself ─────────────────────────────────────

@@ -37,6 +37,8 @@ const props = withDefaults(
          * could still be using and says nothing about which folder it is waiting on.
          */
         busy?: readonly string[]
+        /** A figure to put beside the mark, when the act can count itself. */
+        busyLabel?: string | null
         ui?: MhComponentOverride
     }>(),
     {
@@ -44,6 +46,7 @@ const props = withDefaults(
         picking: false,
         selected: () => [],
         busy: () => [],
+        busyLabel: null,
         ui: undefined,
     },
 )
@@ -141,6 +144,11 @@ const words = computed(() => ({
                             <circle cx="12" cy="12" r="9" stroke-opacity="0.3" />
                             <path d="M21 12a9 9 0 0 0-9-9" />
                         </svg>
+
+                        <!-- ⚠️ WRITTEN ONLY WHEN THERE IS SOMETHING TO WRITE. An act that
+                             cannot count itself leaves this out rather than showing a zero, which
+                             would read as a download that has stalled. -->
+                        <span v-if="busyLabel" :class="cls('busyLabel')">{{ busyLabel }}</span>
                     </span>
 
                     <span v-if="isChosen(folder)" :class="cls('tick')" :aria-hidden="true">

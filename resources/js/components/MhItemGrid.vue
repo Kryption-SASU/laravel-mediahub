@@ -49,6 +49,8 @@ const props = withDefaults(
          * marks the nine, so the wait is drawn where the work is rather than over the screen.
          */
         busy?: readonly string[]
+        /** A figure to put beside the mark, when the act can count itself. */
+        busyLabel?: string | null
         ui?: MhComponentOverride
     }>(),
     {
@@ -59,6 +61,7 @@ const props = withDefaults(
         columns: 1,
         choosing: true,
         busy: () => [],
+        busyLabel: null,
         ui: undefined,
     },
 )
@@ -217,6 +220,7 @@ const label = computed(() => t('grid.count', {}, props.media.length))
             :focused="position === cursor"
             :picking="choosing"
             :busy="busy.includes(item.id)"
+            :busy-label="busyLabel"
             @click="toggle(item)"
             @dblclick="$emit('activate', item)"
             @menu="emit('menu', item, $event)"

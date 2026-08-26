@@ -213,11 +213,60 @@ The page watches for it, clears it, and stops showing the selection as busy.
 Shipped without it, the spinner stayed on the selection for ever while the ZIP sat finished in
 the downloads folder.
 
+⚠️ **But "the answer has begun" is not "the archive is finished."** The cookie arrives within a
+second; the download then runs for as long as it runs. Read as completion, the overlay came off
+after a second while the ZIP was still coming down — reported from a real screen, and the reason
+there is a second mechanism below.
+
 | | |
 |---|---|
 | the frame loads a JSON document | a refusal — raised, with the server's `reason` |
-| the cookie appears | the answer has begun; the browser owns the transfer from here |
-| neither, after two minutes | the wait ends anyway and says nothing: a page left spinning is the fault this exists to prevent |
+| the count says `done` | the archive has been written; **this is what ends the wait** |
+| the cookie appears, and nothing is counting | the answer has begun — all anyone will ever know on a host whose count cannot be reached |
+| nothing heard for two minutes | the wait ends anyway and says nothing: a page left spinning is the fault this exists to prevent |
+
+⚠️ **Once the count has spoken, the cookie stops deciding.** The record it is read from expires
+after fifteen minutes; a download that outlives it would find the mark still set and end the wait
+on it — the same fault by the back door, on exactly the long archives where it hurts.
+
+## How far the archive has got
+
+```
+GET {prefix}/archive/progress/{ticket}
+```
+
+```json
+{ "data": { "known": true, "total": 696254464, "written": 412876800, "done": false } }
+```
+
+The page makes a ticket, sends it with the selection, and asks a **second** request about it —
+the one writing the ZIP is busy, and will not be free to answer until nobody needs telling. The
+bytes are counted **inside** each file, by a stream filter, rather than between them: an archive
+is often one large video and four small images, and counting per entry holds the bar at 3% for
+two minutes and then jumps to 100%.
+
+| | |
+|---|---|
+| `known: false` | never heard of it — asked too early, or the record has expired. **Not an error**, and not a 404: a page told "no such archive" gives up on a download that is about to start |
+| `total` | the weight going **in**. A ZIP's own size cannot be known before it is written — that is what makes it streamable at all |
+| `done` | said outright, never inferred from the numbers meeting: a file that could not be read leaves the count short for ever |
+
+⚠️ **This is the server's side of the transfer, not the browser's.** Between the last byte written
+and the last byte received there are network buffers — a few hundred milliseconds, more on a slow
+line. Close, and not the same thing.
+
+⚠️ **It needs a cache two requests can share.** On a host where they cannot, nothing is ever
+`known` and the page falls back to the cookie: no percentage, and the wait ends when the answer
+begins. That is a degradation, not a breakage, and it is why the cookie is still set.
+
+⚠️ **The ticket is patterned at the route and checked again before it touches a cache key**
+(`[A-Za-z0-9]{8,64}`). It arrives in a request body and ends up concatenated into that key.
+
+⚠️ **And it is a scalar field, not a list.** The form that carries the selection used to append
+`[]` to every field it wrote, which is right for `media` and wrong for everything beside it:
+`ticket[]` reaches the server as a one-element array, which is not a string, which is silently no
+ticket at all — and then no percentage, for ever, on a screen that looks exactly the same. The
+brackets are now part of the name the client builds.
 
 ⚠️ **Only the cookie's presence is read, never its value**, so it does not matter whether the
 host encrypts its outgoing cookies. And **the name is fixed on both sides** — a PHP test holds

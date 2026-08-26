@@ -59,7 +59,18 @@ final class ArchiveController
             }
         }
 
-        return $build($items, $request->input('name'));
+        /*
+         * ⚠️ THE TICKET IS THE PAGE'S OWN AND IT IS PASSED ON AS TEXT OR NOT AT ALL. Whether it
+         * is worth anything is decided where it is used, not here — a controller that judged it
+         * would be a second opinion on the same question, and the two would eventually differ.
+         */
+        $ticket = $request->input('ticket');
+
+        return $build(
+            $items,
+            $request->input('name'),
+            is_string($ticket) ? $ticket : null,
+        );
     }
 
     private function authorize(Media $media): void

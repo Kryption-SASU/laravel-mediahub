@@ -13,6 +13,8 @@ use Kryption\MediaHub\Exceptions\OperationRejected;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaFolder;
 use Kryption\MediaHub\Support\ArchiveCapacity;
+use Kryption\MediaHub\Support\ArchiveProgress;
+use Kryption\MediaHub\Support\CountingStreamFilter;
 use Kryption\MediaHub\Support\FolderTree;
 use Kryption\MediaHub\Support\RuntimeLimits;
 use Kryption\MediaHub\Support\ServerRuntime;
@@ -82,24 +84,40 @@ final class BuildArchive
         private readonly ArchiveCapacity $capacity,
         private readonly RuntimeLimits $limits,
         private readonly ServerRuntime $runtime,
+        private readonly ArchiveProgress $progress,
     ) {
     }
 
-    public function __invoke(ResolvedItems $items, ?string $fileName = null): StreamedResponse
-    {
+    public function __invoke(
+        ResolvedItems $items,
+        ?string $fileName = null,
+        ?string $ticket = null,
+    ): StreamedResponse {
         $entries = $this->collect($items);
 
-        $this->refuseIfOversized($entries);
+        $weight = $this->refuseIfOversized($entries);
 
         $name = $this->safeName($fileName ?? (string) $this->config->get('mediahub.archives.file_name', 'medias.zip'));
 
+        /*
+         * ⚠️ ANNOUNCED BEFORE THE RESPONSE LEAVES, not inside the callback. The page starts
+         * asking the moment it has submitted; a record that only appeared once streaming began
+         * would answer "no such archive" to the first few questions, which is indistinguishable
+         * from one that was refused.
+         */
+        $watched = ArchiveProgress::isTicket($ticket);
+
+        if ($watched) {
+            $this->progress->start((string) $ticket, $weight);
+        }
+
         $response = new StreamedResponse(
-            function () use ($entries): void {
+            function () use ($entries, $weight, $ticket, $watched): void {
                 /* ⚠️ INSIDE THE CALLBACK, NOT BEFORE IT. The response is built now and sent
                  * later; clearing buffers while the framework is still assembling it would drop
                  * output that has not been handed over yet. */
                 $this->clearTheWay();
-                $this->stream($entries);
+                $this->stream($entries, $watched ? (string) $ticket : null, $weight);
             },
             200,
             [
@@ -319,7 +337,7 @@ final class BuildArchive
      *
      * @param  array<int, array{media: Media, name: string}>  $entries
      */
-    private function refuseIfOversized(array $entries): void
+    private function refuseIfOversized(array $entries): int
     {
         if ($entries === []) {
             throw OperationRejected::because('archive_empty');
@@ -362,6 +380,11 @@ final class BuildArchive
         if ($total > $this->capacity->effectiveCeiling()) {
             throw OperationRejected::because('archive_beyond_capacity');
         }
+
+        /* ⚠️ HANDED BACK RATHER THAN COUNTED AGAIN. The weight is what the ceilings were checked
+         * against and what the progress bar divides by; working it out twice is two places for
+         * the two numbers to stop agreeing. */
+        return $total;
     }
 
     /**
@@ -409,7 +432,7 @@ final class BuildArchive
     /**
      * @param  array<int, array{media: Media, name: string}>  $entries
      */
-    private function stream(array $entries): void
+    private function stream(array $entries, ?string $ticket, int $weight): void
     {
         $zip = new ZipStream(
             /*
@@ -451,6 +474,14 @@ final class BuildArchive
                 continue;
             }
 
+            /*
+             * ⚠️ COUNTED ON THE WAY IN, INSIDE THE FILE. An archive is often one large video and
+             * four small images: counting between entries would hold the bar at 3% for two
+             * minutes and then jump to 100%, which is a worse lie than showing nothing. The
+             * filter sees every block ZipStream reads and passes each straight through.
+             */
+            $counter = $this->countingOn($handle, $ticket, $weight);
+
             try {
                 $zip->addFileFromStream(
                     fileName: $entry['name'],
@@ -458,6 +489,10 @@ final class BuildArchive
                     compressionMethod: $this->compression((string) $media->mime_type),
                 );
             } finally {
+                if ($counter !== null) {
+                    @stream_filter_remove($counter);
+                }
+
                 if (is_resource($handle)) {
                     fclose($handle);
                 }
@@ -472,6 +507,43 @@ final class BuildArchive
         }
 
         $zip->finish();
+
+        /*
+         * ⚠️ SAID EXPLICITLY RATHER THAN LEFT TO BE INFERRED. "Written equals total" is not the
+         * same statement as "finished": a file that could not be read leaves the count short for
+         * ever, and a page waiting for the numbers to meet would wait for ever with it.
+         */
+        if ($ticket !== null) {
+            $this->progress->finish($ticket, $weight);
+        }
+    }
+
+    /**
+     * ⚠️ NOTHING IS ATTACHED WHEN NOBODY IS WATCHING. A filter on every read costs a function
+     * call per block for a number no page asked for — and the archive route is also used by
+     * hosts that never render our screen.
+     *
+     * @param  resource  $handle
+     * @return resource|null  the filter, to be taken off with the handle
+     */
+    private function countingOn(mixed $handle, ?string $ticket, int $weight): mixed
+    {
+        if ($ticket === null) {
+            return null;
+        }
+
+        CountingStreamFilter::register();
+
+        $filter = @stream_filter_append(
+            $handle,
+            CountingStreamFilter::NAME,
+            STREAM_FILTER_READ,
+            function (int $bytes) use ($ticket, $weight): void {
+                $this->progress->advance($ticket, $bytes, $weight);
+            },
+        );
+
+        return is_resource($filter) ? $filter : null;
     }
 
     /**
