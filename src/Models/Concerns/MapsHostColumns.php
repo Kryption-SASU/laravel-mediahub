@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kryption\MediaHub\Models\Concerns;
 
+use Kryption\MediaHub\Models\MediaFolder;
 use Illuminate\Database\Eloquent\Builder;
 use Kryption\MediaHub\Backends\ColumnMap;
 
@@ -65,11 +66,59 @@ trait MapsHostColumns
         $column = static::column($logicalColumn);
         $root = static::columnMap()->rootValue();
 
-        if ($parentKey === null) {
-            return $root === null ? $query->whereNull($column) : $query->where($column, $root);
+        if ($parentKey !== null) {
+            return $query->where($column, $parentKey);
         }
 
-        return $query->where($column, $parentKey);
+        $table = $this->getTable();
+        $folders = new MediaFolder();
+
+        return $query->where(function (Builder $atRoot) use ($column, $root, $table, $folders): void {
+            if ($root === null) {
+                $atRoot->whereNull($column);
+            } else {
+                $atRoot->where($column, $root);
+            }
+
+            /*
+             * ⚠️ AND WHATEVER NAMES A FOLDER THAT IS NOT THERE, because otherwise it is nowhere.
+             * A row pointing at a folder whose record has gone is neither at the root nor inside
+             * anything that can be opened: it is alive, it occupies storage, and no screen can
+             * reach it — including the one that would let somebody move or delete it. Measured on
+             * a production library where 40 of an organisation's 65 files named a folder that
+             * did not exist, leaving 25 visible.
+             *
+             * ⚠️ A FOLDER CAN VANISH WITHOUT ANYBODY DOING ANYTHING WRONG — a data migration, a
+             * deletion made in SQL, an import that brought files without their tree. The root is
+             * the only place where such a file becomes reachable again, and reaching it is the
+             * precondition for every other repair.
+             *
+             * ⚠️ SOFT-DELETED IS NOT ABSENT, AND THE DIFFERENCE IS DELIBERATE. A folder in the
+             * trash still exists and is a state somebody chose; pulling its contents up to the
+             * root would undo that choice. Only a missing RECORD counts here.
+             */
+            $atRoot->orWhere(function (Builder $orphan) use ($column, $table, $folders): void {
+                /*
+                 * ⚠️ THE SUBQUERY IS ALIASED, AND WITHOUT THAT IT ANSWERS ABOUT ITSELF. A folder's
+                 * parent is another folder, so the inner `from` names the SAME table as the outer
+                 * query: unaliased, `folders.id = folders.parent_id` compares each inner row with
+                 * itself and is false for every folder that is not its own parent — which is all
+                 * of them. Every folder then looked orphaned, and the whole tree flattened onto
+                 * the root. Two tests about trashed folders said so immediately.
+                 */
+                $alias = 'mediahub_parent_lookup';
+
+                $orphan->whereNotNull($column)
+                    ->whereNotExists(function ($exists) use ($column, $table, $folders, $alias): void {
+                        $exists->select($folders->getKeyName())
+                            ->from($folders->getTable().' as '.$alias)
+                            ->whereColumn(
+                                $alias.'.'.$folders->getKeyName(),
+                                $table.'.'.$column
+                            );
+                    });
+            });
+        });
     }
 
     /**

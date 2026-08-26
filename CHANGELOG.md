@@ -6,6 +6,37 @@ Notable changes, newest first. This project follows [semantic versioning](https:
 breaking, and that is the honest description of this one: the public surface is still moving.
 Pin a minor if that matters to you.
 
+## 0.2.1
+
+Three guards that were not there, found by running the 0.2.0 conversion command over a real
+library of 1094 files.
+
+### Fixed
+
+- **A file whose folder no longer exists is at the root**, because otherwise it is nowhere. A row
+  naming a folder whose record has gone is neither at the root nor inside anything that can be
+  opened: alive, occupying storage, and unreachable by every screen — including the one that
+  would let somebody move or delete it. Measured on a production library where 40 of an
+  organisation's 65 live files named a folder that did not exist, leaving 25 on screen. A folder
+  vanishes without anybody doing anything wrong — a data migration, a deletion made in SQL, an
+  import that brought files without their tree. Soft-deleted is not absent: a folder in the trash
+  still exists and stays a deliberate state.
+- **The memory guard now covers what a decode really costs.** The first version weighed
+  `width * height * 4` and allowed a tenth on top; measured, a decode peaks at up to 1.58 times
+  that figure, so the margin is now two. It had let through a 4997 x 2919 PNG weighing 1.3 MB,
+  which exhausted a 128 MB limit exactly as if no guard existed — the guard ran, did its
+  arithmetic, and said yes.
+- **An unreadable header is refused rather than handed on.** The guard used to step aside when
+  the dimensions could not be read, on the grounds that the decoder would report the problem
+  itself. It would — if it survived. Where nothing can be weighed, passing the file on is a guess
+  that its cost is small, and the only outcome that guess has when wrong is a dead process.
+- **Imagick is guarded too, and is not exempt from `memory_limit`.** Its pixel cache lives
+  outside the PHP allocator, which reads as "outside the ceiling" and is not: measured on that
+  same image, a `readImageBlob` moved PHP's own accounting by 46 MB and took the peak to 106 of a
+  128 MB limit. `ImagickGuard` bounds what ImageMagick spends on itself and says nothing about
+  the process hosting it. Both drivers now ask one shared rule, so the two cannot drift — a guard
+  fitted to one of them is a guard a host loses by changing `mediahub.images.driver`.
+
 ## 0.2.0
 
 Work that cannot be done now reports itself instead of ending the process. Three failures met on

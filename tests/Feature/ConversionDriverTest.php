@@ -568,4 +568,146 @@ class ConversionDriverTest extends TestCase
         );
     }
 
+
+    /**
+     * THE MARGIN IS THE GUARD, NOT THE PIXEL COUNT.
+     *
+     * ⚠️ THIS IS THE CASE THE FIRST VERSION LET THROUGH. `width * height * 4` is what GD ends up
+     * HOLDING; the decoder allocates row buffers, and for PNG an inflate window, on the way
+     * there. A guard sized on the pixels alone therefore does its arithmetic, says yes, and the
+     * process dies anyway — which is what happened in production on a 4997 x 2919 PNG weighing
+     * 1.3 MB, against a 128 MB limit.
+     *
+     * ⚠️ SO THE BUDGET HERE SITS BETWEEN THE TWO ANSWERS ON PURPOSE: comfortably above
+     * `width * height * 4`, comfortably below what a decode actually costs. A guard that weighed
+     * pixels alone would accept; one that accounts for the decode refuses. Nothing else in this
+     * file can tell those two apart.
+     */
+    public function test_the_refusal_accounts_for_what_a_decode_costs_beyond_its_pixels(): void
+    {
+        $this->requireGd();
+
+        $canvas = imagecreatetruecolor(1200, 1200);
+        ob_start();
+        imagepng($canvas);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($canvas);
+
+        Storage::disk('media')->put('dense.png', $bytes);
+
+        $driver = new GdConversionDriver($this->app['filesystem']);
+        $ceiling = ini_get('memory_limit');
+
+        try {
+            /* 1200 x 1200 x 4 is 5.8 MB of pixels. Eight megabytes of room is more than that
+             * and less than the decode — the only window where the two guards disagree. */
+            ini_set('memory_limit', (string) (memory_get_usage(true) + 8 * 1024 * 1024));
+
+            $refused = null;
+
+            try {
+                $driver->convert('media', 'dense.png', 'dense-thumb.png', ['width' => 4, 'height' => 4]);
+            } catch (\RuntimeException $e) {
+                $refused = $e->getMessage();
+            }
+
+            $this->assertSame(
+                'conversion_source_needs_more_memory',
+                $refused,
+                'A budget above the pixel count but below the cost of decoding it was accepted.'
+            );
+        } finally {
+            ini_set('memory_limit', (string) $ceiling);
+        }
+    }
+
+    /**
+     * ⚠️ AN UNREADABLE HEADER IS REFUSED RATHER THAN HANDED ON. Where the dimensions cannot be
+     * read there is nothing to weigh, and passing the file to the decoder is a guess that its
+     * cost is small — a guess whose only outcome when wrong is a dead process.
+     *
+     * ⚠️ AND THIS TEST DOES NOT DISTINGUISH THE TWO IMPLEMENTATIONS, WHICH IS WORTH SAYING
+     * PLAINLY. The decode refuses the same bytes with the same sentence, so it passes either
+     * way; what it holds is the sentence itself, so that a later change cannot quietly turn a
+     * refusal into a different answer. The reason for the guard is a memory failure that no
+     * assertion can survive to observe.
+     */
+    public function test_bytes_with_no_readable_header_are_refused(): void
+    {
+        $this->requireGd();
+
+        Storage::disk('media')->put('mystery.png', 'this is not an image at all');
+
+        $driver = new GdConversionDriver($this->app['filesystem']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('conversion_source_undecodable');
+
+        $driver->convert('media', 'mystery.png', 'mystery-thumb.png', ['width' => 4, 'height' => 4]);
+    }
+
+
+    /**
+     * IMAGICK IS NOT EXEMPT FROM THE CEILING, WHICH IS EASY TO BELIEVE AND WRONG.
+     *
+     * ⚠️ ITS PIXEL CACHE LIVES OUTSIDE THE PHP ALLOCATOR, so the natural reading is that PHP's
+     * `memory_limit` does not apply to it and that `ImagickGuard` is enough. Measured on the
+     * image that ended a production run — 4997 x 2919 — a `readImageBlob` moved PHP's OWN
+     * accounting by 46 MB and took the peak to 106 of a 128 MB limit. `ImagickGuard` bounds what
+     * ImageMagick spends on itself; it says nothing about the process hosting it.
+     *
+     * ⚠️ SO THE TWO DRIVERS ASK THE SAME QUESTION, and this test exists to keep them asking it.
+     * A guard fitted to one of them is a guard the host loses by switching
+     * `mediahub.images.driver` — a line of configuration away from the failure coming back.
+     */
+    public function test_imagick_refuses_an_image_larger_than_the_memory_left(): void
+    {
+        $this->requireImagick();
+
+        $canvas = imagecreatetruecolor(1200, 1200);
+        ob_start();
+        imagepng($canvas);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($canvas);
+
+        Storage::disk('media')->put('wide.png', $bytes);
+
+        $driver = new ImagickConversionDriver($this->app['filesystem'], $this->app['config']);
+        $ceiling = ini_get('memory_limit');
+
+        try {
+            ini_set('memory_limit', (string) (memory_get_usage(true) + 4 * 1024 * 1024));
+
+            $refused = null;
+
+            try {
+                $driver->convert('media', 'wide.png', 'wide-thumb.png', ['width' => 4, 'height' => 4]);
+            } catch (\RuntimeException $e) {
+                $refused = $e->getMessage();
+            }
+
+            $this->assertSame(
+                'conversion_source_needs_more_memory',
+                $refused,
+                'Imagick decoded an image that did not fit in the memory left.'
+            );
+
+            $this->assertFalse(
+                Storage::disk('media')->exists('wide-thumb.png'),
+                'A refused conversion still wrote a file.'
+            );
+        } finally {
+            ini_set('memory_limit', (string) $ceiling);
+        }
+
+        /* ⚠️ THE COUNTERPART, WITHOUT WHICH THE ABOVE PROVES NOTHING: a guard that refused
+         * everything would satisfy it just as well. */
+        $driver->convert('media', 'wide.png', 'wide-back.png', ['width' => 4, 'height' => 4]);
+
+        $this->assertTrue(
+            Storage::disk('media')->exists('wide-back.png'),
+            'The same file was refused with the room back, so the guard does not follow the memory.'
+        );
+    }
+
 }
