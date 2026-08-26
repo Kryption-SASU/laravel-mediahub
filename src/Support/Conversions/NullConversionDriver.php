@@ -39,4 +39,11 @@ final class NullConversionDriver implements ConversionDriver
             'No conversion driver is available: `supports()` had answered no.'
         );
     }
+
+    /** ⚠️ It draws nothing, so it needs nothing. */
+    public function needsAProgram(): bool
+    {
+        return false;
+    }
+
 }

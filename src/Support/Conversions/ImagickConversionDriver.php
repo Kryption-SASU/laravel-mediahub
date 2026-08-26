@@ -218,4 +218,11 @@ final class ImagickConversionDriver implements ConversionDriver
 
         return $result;
     }
+
+    /** ⚠️ ImageMagick is used through its extension here, not through its command line. */
+    public function needsAProgram(): bool
+    {
+        return false;
+    }
+
 }

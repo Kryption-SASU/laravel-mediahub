@@ -205,6 +205,11 @@ class CollectionConversionsTest extends TestCase
                 return true;
             }
 
+            public function needsAProgram(): bool
+            {
+                return false;
+            }
+
             public function outputMimeType(string $sourceMimeType): string
             {
                 return 'image/webp';

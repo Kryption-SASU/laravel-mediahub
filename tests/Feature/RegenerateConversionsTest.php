@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Kryption\MediaHub\Tests\Feature;
 
+use Kryption\MediaHub\Jobs\GenerateConversionsJob;
+use Kryption\MediaHub\Contracts\ConversionDrivers;
+use Kryption\MediaHub\Contracts\ConversionDriver;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -314,4 +318,134 @@ class RegenerateConversionsTest extends TestCase
 
         $this->assertSame(1, MediaConversion::query()->count());
     }
+
+    // ── Where the host forbids running a program ─────────────────────────────
+
+    /**
+     * A DERIVATIVE THAT NEEDS A PROGRAM IS HANDED TO THE QUEUE WHERE THE REQUEST MAY NOT RUN ONE.
+     *
+     * ⚠️ THIS IS NOT A CHOICE BETWEEN TWO WAYS OF ANSWERING. `proc_open` sits in
+     * `disable_functions` on most panel-managed hosting, so ffmpeg and pdftoppm cannot be started
+     * while answering a request at all — the thumbnail is not slower there, it is impossible.
+     * The same work succeeds on the queue, whose command line usually runs under a different
+     * configuration. Measured on a production host where every regeneration wrote a failed row
+     * saying "the Process class relies on proc_open".
+     *
+     * ⚠️ AND 202 RATHER THAN 200, WHICH IS THE HALF THAT MATTERS ON SCREEN. A 200 has the tile
+     * redraw a picture that does not exist yet, which reads as "nothing happened" and invites the
+     * same click again — the exact failure the synchronous path was chosen to avoid.
+     */
+    public function test_a_derivative_needing_a_program_is_queued_where_the_request_cannot_run_one(): void
+    {
+        $media = $this->upload(SampleImages::bytes('image/png'), 'clip.png');
+        MediaConversion::query()->delete();
+
+        /* ⚠️ THE FAKE GOES AFTER THE UPLOAD, AND THAT IS WHAT MAKES THE ASSERTIONS MEAN
+         * ANYTHING. An upload dispatches a conversion job of its own: faked before it, the queue
+         * records that one, and both tests below pass owing nothing to the controller — the
+         * first sees the upload's job and takes it for the one it asked for. */
+        Queue::fake();
+
+        $this->pretendTheHost(programsCanRun: false, driverNeedsAProgram: true);
+
+        $this->postJson('/media/'.$media->uuid.'/conversions')->assertStatus(202);
+
+        Queue::assertPushed(GenerateConversionsJob::class);
+
+        $this->assertSame(
+            0,
+            MediaConversion::query()->where('media_id', $media->getKey())->count(),
+            'The request built a derivative it had just declared itself unable to build.'
+        );
+    }
+
+    /**
+     * ⚠️ THE COUNTERPART, WITHOUT WHICH THE FIRST PROVES NOTHING. A controller that queued
+     * everything would satisfy it just as well; what has to be shown is that the answer follows
+     * the host, and that a machine which CAN run a program still draws the picture on the spot.
+     */
+    public function test_the_same_file_is_drawn_at_once_where_the_request_may_run_a_program(): void
+    {
+        $media = $this->upload(SampleImages::bytes('image/png'), 'clip.png');
+        MediaConversion::query()->delete();
+
+        /* ⚠️ THE FAKE GOES AFTER THE UPLOAD, AND THAT IS WHAT MAKES THE ASSERTIONS MEAN
+         * ANYTHING. An upload dispatches a conversion job of its own: faked before it, the queue
+         * records that one, and both tests below pass owing nothing to the controller — the
+         * first sees the upload's job and takes it for the one it asked for. */
+        Queue::fake();
+
+        $this->pretendTheHost(programsCanRun: true, driverNeedsAProgram: true);
+
+        $this->postJson('/media/'.$media->uuid.'/conversions')->assertOk();
+
+        Queue::assertNothingPushed();
+
+        $this->assertSame(
+            1,
+            MediaConversion::query()->where('media_id', $media->getKey())->count(),
+            'A host that can run a program still sent the work away.'
+        );
+    }
+
+    /**
+     * ⚠️ THE DRIVER IS DESCRIBED RATHER THAN INSTALLED, because the two answers this test needs
+     * to tell apart are properties of the MACHINE — is ffmpeg here, is `proc_open` allowed — and
+     * a test that depended on them would report a different thing on every host, including
+     * "passed" on the one where the bug lives.
+     */
+    private function pretendTheHost(bool $programsCanRun, bool $driverNeedsAProgram): void
+    {
+        $this->app->instance(
+            ExternalTools::class,
+            new ExternalTools($this->app['config'], programsCanRun: $programsCanRun),
+        );
+
+        $inner = $this->app->make(ConversionDrivers::class);
+
+        $this->app->instance(ConversionDrivers::class, new class($inner, $driverNeedsAProgram) implements ConversionDrivers
+        {
+            public function __construct(
+                private readonly ConversionDrivers $inner,
+                private readonly bool $needs,
+            ) {
+            }
+
+            public function for(string $mimeType): ?ConversionDriver
+            {
+                $driver = $this->inner->for($mimeType);
+
+                return $driver === null ? null : new class($driver, $this->needs) implements ConversionDriver
+                {
+                    public function __construct(
+                        private readonly ConversionDriver $driver,
+                        private readonly bool $needs,
+                    ) {
+                    }
+
+                    public function supports(string $mimeType): bool
+                    {
+                        return $this->driver->supports($mimeType);
+                    }
+
+                    public function needsAProgram(): bool
+                    {
+                        return $this->needs;
+                    }
+
+                    public function outputMimeType(string $sourceMimeType): string
+                    {
+                        return $this->driver->outputMimeType($sourceMimeType);
+                    }
+
+                    /** @param array<string, mixed> $definition */
+                    public function convert(string $disk, string $path, string $target, array $definition): array
+                    {
+                        return $this->driver->convert($disk, $path, $target, $definition);
+                    }
+                };
+            }
+        });
+    }
+
 }

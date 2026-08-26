@@ -165,4 +165,11 @@ final class PdfConversionDriver implements ConversionDriver
     {
         return is_file($page) ? (string) file_get_contents($page) : '';
     }
+
+    /** ⚠️ The page is drawn by pdftoppm or by gs — both are programs. */
+    public function needsAProgram(): bool
+    {
+        return true;
+    }
+
 }

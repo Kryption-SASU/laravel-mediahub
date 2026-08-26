@@ -116,6 +116,13 @@ return [
      */
     'tools' => [
 
+        'programs' => [
+            'title' => 'Lancer un programme depuis une requête',
+            'ok' => 'Autorisé.',
+            'warning' => "Interdit sur cette installation : proc_open n'est pas disponible, donc aucun outil ci-dessus n'a pu être interrogé et aucun ne peut être lancé pendant une requête. Les miniatures fabriquées par un worker de file ne sont pas concernées — la ligne de commande tourne le plus souvent sous une autre configuration.",
+            'fix' => "Rien à changer si un worker de file fabrique les dérivés ; vérifiez qu'il tourne. Autoriser proc_open côté serveur web marcherait aussi, et donnerait à toute requête le droit de lancer des programmes — une permission bien plus large que ce qu'une miniature demande.",
+        ],
+
         'ffmpeg' => [
             'title' => 'ffmpeg — miniatures des vidéos',
             'ok' => 'Trouvé dans :path (:version).',

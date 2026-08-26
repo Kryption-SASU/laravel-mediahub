@@ -255,4 +255,11 @@ final class VideoConversionDriver implements ConversionDriver
             $height,
         );
     }
+
+    /** ⚠️ The frame is captured by ffmpeg, which is a program. */
+    public function needsAProgram(): bool
+    {
+        return true;
+    }
+
 }
