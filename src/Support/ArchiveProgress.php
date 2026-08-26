@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Kryption\MediaHub\Support;
 
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\NullStore;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use Illuminate\Contracts\Config\Repository as Config;
 
 /**
  * HOW FAR AN ARCHIVE HAS GOT, PUBLISHED WHERE THE PAGE THAT ASKED FOR IT CAN READ IT.
@@ -17,6 +21,16 @@ use Illuminate\Contracts\Cache\Repository as Cache;
  * ⚠️ WHICH MEANS A SHARED STORE, NOT A PROPERTY. The request writing the archive and the
  * requests asking about it are different processes: a counter in memory would be read by nobody.
  * The application's cache is where two processes already agree to meet.
+ *
+ * ⚠️ AND NOT EVERY CACHE IS SHARED. `array` and `null` live and die inside one request, so the
+ * question would always be answered "never heard of it" and no bar would ever appear. That is a
+ * degradation rather than a breakage — the page falls back to knowing only that the answer has
+ * begun — but a silent one, which is why {@see \Kryption\MediaHub\Actions\DiagnoseSetup} says so
+ * out loud rather than leaving somebody to wonder where their percentage went.
+ *
+ * ⚠️ AND THE STORE CAN BE NAMED, because "the application's cache" is not always the right one.
+ * A host whose default is `array` in one environment, or who would rather keep a hot key out of
+ * a database-backed cache, points `mediahub.archives.progress_store` at another one.
  *
  * ⚠️ AND WHAT IT REPORTS IS THE SERVER'S SIDE OF THE TRANSFER. Between the last byte written
  * here and the last byte the browser receives there are network buffers — a few hundred
@@ -50,11 +64,70 @@ final class ArchiveProgress
      */
     private const REPORT_EVERY_BYTES = 1_048_576;
 
-    /** @var array<string, array{written: int, published: int}> */
+    /**
+     * ⚠️ AND NOT MORE OFTEN THAN THIS EITHER, WHICH IS THE FLOOR THAT MATTERS ON A SLOW STORE.
+     * A megabyte is nothing on a fast disk: reading at 300 MB/s, the byte rule alone asks the
+     * cache to write three hundred times a second, and on a database-backed store that is three
+     * hundred statements a second for a number nobody can read that fast. Four times a second is
+     * smooth to a human eye and invisible to a server.
+     */
+    private const REPORT_EVERY_SECONDS = 0.25;
+
+    /** @var array<string, array{written: int, published: int, at: float}> */
     private array $counted = [];
 
-    public function __construct(private readonly Cache $cache)
+    private ?Cache $store = null;
+
+    /**
+     * ⚠️ THE FLOOR IS INJECTABLE BECAUSE A BENCH CANNOT WAIT FOR A CLOCK RELIABLY. Written with a
+     * sleep, the test asserting that a fast read is held back depends on the machine finishing
+     * two statements inside a quarter of a second — true almost always, and the "almost" is a
+     * suite that goes red on a busy afternoon for no reason anybody can reproduce. Naming the
+     * floor makes both sides of the rule exact.
+     */
+    public function __construct(
+        private readonly CacheFactory $caches,
+        private readonly Config $config,
+        private readonly float $everySeconds = self::REPORT_EVERY_SECONDS,
+    ) {
+    }
+
+    /**
+     * WHETHER TWO REQUESTS CAN ACTUALLY MEET IN THIS CACHE.
+     *
+     * ⚠️ ASKED OF THE STORE, NOT OF THE CONFIGURATION. A name in a file says what was intended;
+     * what is running is what decides whether a second request will ever see this number. `array`
+     * and `null` answer no — both are perfectly ordinary choices, and neither survives the end of
+     * the request that wrote to it.
+     */
+    public function isShared(): bool
     {
+        $store = $this->cache()->getStore();
+
+        return ! ($store instanceof ArrayStore || $store instanceof NullStore);
+    }
+
+    /**
+     * What to call the store on screen.
+     *
+     * ⚠️ THE CLASS RATHER THAN THE CONFIGURED NAME. A host reading "your cache is `array`" when
+     * they configured `redis` has learnt something; one reading back their own setting has
+     * learnt nothing, and would go on believing the file they edited is what is running.
+     */
+    public function name(): string
+    {
+        $parts = explode('\\', $this->cache()->getStore()::class);
+        $last = (string) end($parts);
+
+        return strtolower((string) preg_replace('/Store$/', '', $last));
+    }
+
+    /** ⚠️ RESOLVED ONCE AND LATE: naming a store that does not exist must fail where it is used. */
+    private function cache(): Cache
+    {
+        $named = $this->config->get('mediahub.archives.progress_store');
+
+        return $this->store ??= $this->caches->store(is_string($named) && $named !== '' ? $named : null);
     }
 
     public static function isTicket(?string $ticket): bool
@@ -79,7 +152,7 @@ final class ArchiveProgress
             return;
         }
 
-        $this->counted[$ticket] = ['written' => 0, 'published' => 0];
+        $this->counted[$ticket] = ['written' => 0, 'published' => 0, 'at' => microtime(true)];
 
         $this->publish($ticket, 0, max(0, $total), false);
     }
@@ -97,7 +170,20 @@ final class ArchiveProgress
             return;
         }
 
+        /*
+         * ⚠️ AND THE CLOCK HAS ITS SAY TOO, WHICH IS THE FLOOR THAT MATTERS ON A SLOW STORE. A
+         * megabyte is nothing on a fast disk: reading at 300 MB/s, the byte rule alone asks the
+         * cache to write three hundred times a second — three hundred statements a second on a
+         * database-backed store, for a number no eye can follow at that rate.
+         */
+        $now = microtime(true);
+
+        if ($now - $this->counted[$ticket]['at'] < $this->everySeconds) {
+            return;
+        }
+
         $this->counted[$ticket]['published'] = $written;
+        $this->counted[$ticket]['at'] = $now;
 
         $this->publish($ticket, $written, $total, false);
     }
@@ -126,7 +212,7 @@ final class ArchiveProgress
             return null;
         }
 
-        $found = $this->cache->get(self::KEY.$ticket);
+        $found = $this->cache()->get(self::KEY.$ticket);
 
         return is_array($found) ? $found : null;
     }
@@ -134,7 +220,7 @@ final class ArchiveProgress
     /** ⚠️ TRUSTS ITS TICKET, because nothing reaches it without having been through `start`. */
     private function publish(string $ticket, int $written, int $total, bool $done): void
     {
-        $this->cache->put(
+        $this->cache()->put(
             self::KEY.$ticket,
             ['total' => $total, 'written' => $written, 'done' => $done],
             self::TTL_SECONDS,

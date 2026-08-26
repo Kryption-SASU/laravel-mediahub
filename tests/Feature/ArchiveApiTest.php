@@ -39,6 +39,13 @@ class ArchiveApiTest extends TestCase
     {
         $app['config']->set('mediahub.routes.middleware', ['web']);
 
+        /* ⚠️ A SECOND STORE, OF A DIFFERENT KIND, so that "the named one" is a claim with teeth:
+         * writing to the default would satisfy a bench where both are the same driver. */
+        $app['config']->set('cache.stores.shared', [
+            'driver' => 'file',
+            'path' => sys_get_temp_dir().'/mediahub-archive-cache',
+        ]);
+
         $app['config']->set('filesystems.disks.media', [
             'driver' => 'local',
             'root' => sys_get_temp_dir().'/mediahub-archive',
@@ -52,6 +59,7 @@ class ArchiveApiTest extends TestCase
         parent::setUp();
 
         $this->app['files']->deleteDirectory($this->root());
+        $this->app['files']->deleteDirectory(sys_get_temp_dir().'/mediahub-archive-cache');
         $this->app['files']->ensureDirectoryExists($this->root());
 
         self::$current = 'org:a';
@@ -597,6 +605,94 @@ class ArchiveApiTest extends TestCase
         $this->getJson('/media/archive/progress/zzzz9999zzzz9999')
             ->assertOk()
             ->assertJsonPath('data.known', false);
+    }
+
+    // ── The store the count is left in ───────────────────────────────────────
+
+    /**
+     * ⚠️ NOT EVERY CACHE IS SHARED, AND LARAVEL OFFERS SEVERAL THAT ARE NOT. `array` and `null`
+     * live and die inside one request: the second request asking how far an archive has got
+     * would always be told "never heard of it", so no bar would ever appear and nothing would
+     * say why. What is asked here is the STORE, not the configured name — a name says what was
+     * intended, and the class says what is running.
+     */
+    public function test_it_knows_when_two_requests_cannot_meet_in_the_cache(): void
+    {
+        $progress = $this->app->make(ArchiveProgress::class);
+
+        /* The bench runs on the array store, which is exactly the case worth detecting. */
+        $this->assertFalse($progress->isShared());
+        $this->assertSame('array', $progress->name());
+    }
+
+    public function test_it_knows_when_they_can(): void
+    {
+        $this->app['config']->set('mediahub.archives.progress_store', 'shared');
+
+        $progress = $this->app->make(ArchiveProgress::class);
+
+        $this->assertTrue($progress->isShared());
+        $this->assertSame('file', $progress->name());
+    }
+
+    /**
+     * ⚠️ AND THE NAMED STORE IS THE ONE WRITTEN TO. A host whose default cache cannot be shared
+     * points this at one that can; read from the default anyway, the setting would look accepted
+     * and change nothing — which is the shape of bug nobody reports because nothing is different.
+     */
+    public function test_the_count_is_left_in_the_store_that_was_named(): void
+    {
+        $this->app['config']->set('mediahub.archives.progress_store', 'shared');
+
+        $this->app->make(ArchiveProgress::class)->start(self::TICKET, 1000);
+
+        $this->assertNotNull($this->app['cache']->store('shared')->get('mediahub:archive:'.self::TICKET));
+        $this->assertNull($this->app['cache']->store('array')->get('mediahub:archive:'.self::TICKET));
+    }
+
+    /**
+     * ⚠️ A MEGABYTE IS NOTHING ON A FAST DISK. Reading at 300 MB/s, a rule counting only bytes
+     * asks the cache to write three hundred times a second — three hundred statements a second
+     * on a database-backed store, for a figure no eye can follow at that rate. Both floors have
+     * to hold, and each is asserted on its own here.
+     */
+    private function counter(float $everySeconds): ArchiveProgress
+    {
+        return new ArchiveProgress($this->app['cache'], $this->app['config'], $everySeconds);
+    }
+
+    public function test_the_clock_holds_a_fast_read_back(): void
+    {
+        $progress = $this->counter(10.0);
+
+        $progress->start(self::TICKET, 10_000_000);
+
+        /* Four megabytes: well past the byte floor, and inside the time one. */
+        $progress->advance(self::TICKET, 4_000_000, 10_000_000);
+
+        $this->assertSame(0, $progress->read(self::TICKET)['written'], 'The clock had no say.');
+    }
+
+    /** ⚠️ AND LETS IT THROUGH ONCE THE FLOOR HAS PASSED, or the bar would never move at all. */
+    public function test_the_count_is_written_once_the_floor_has_passed(): void
+    {
+        $progress = $this->counter(0.0);
+
+        $progress->start(self::TICKET, 10_000_000);
+        $progress->advance(self::TICKET, 4_000_000, 10_000_000);
+
+        $this->assertSame(4_000_000, $progress->read(self::TICKET)['written']);
+    }
+
+    /** ⚠️ AND TIME ALONE DOES NOT OPEN IT EITHER, or a trickling read would write just as often. */
+    public function test_a_trickle_is_not_written_however_long_it_takes(): void
+    {
+        $progress = $this->counter(0.0);
+
+        $progress->start(self::TICKET, 10_000_000);
+        $progress->advance(self::TICKET, 100, 10_000_000);
+
+        $this->assertSame(0, $progress->read(self::TICKET)['written']);
     }
 
     // ── The time the stream gives itself ─────────────────────────────────────

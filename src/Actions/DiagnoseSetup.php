@@ -7,6 +7,7 @@ namespace Kryption\MediaHub\Actions;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Translation\Translator;
 use Kryption\MediaHub\Support\ArchiveCapacity;
+use Kryption\MediaHub\Support\ArchiveProgress;
 use Kryption\MediaHub\Support\RuntimeLimits;
 use Kryption\MediaHub\Support\ServerRuntime;
 
@@ -49,6 +50,7 @@ final class DiagnoseSetup
         private readonly RuntimeLimits $limits,
         private readonly ArchiveCapacity $capacity,
         private readonly ServerRuntime $runtime,
+        private readonly ArchiveProgress $progress,
     ) {
     }
 
@@ -62,6 +64,7 @@ final class DiagnoseSetup
             ...$this->uploadChecks(),
             $this->archiveCapacityCheck(),
             $this->executionTimeCheck(),
+            $this->progressCheck(),
             $this->bufferingCheck(),
             $this->imageMemoryCheck(),
             ...$this->extensionChecks(),
@@ -209,6 +212,29 @@ final class DiagnoseSetup
         return $limit === null || $liftable
             ? $this->finding('archives.execution_time', self::FINE, $words, null)
             : $this->finding('archives.execution_time', self::RISKY, $words, $words);
+    }
+
+    /**
+     * WHETHER A DOWNLOAD CAN BE WATCHED AT ALL ON THIS INSTALLATION.
+     *
+     * ⚠️ A FEATURE THAT SILENTLY DOES NOTHING IS WORSE THAN ONE THAT IS ABSENT. The progress bar
+     * needs a cache two requests can meet in; on `array` or `null` the answer is always "never
+     * heard of it", so no bar ever appears and nothing anywhere says why. The screen still works
+     * — it falls back to knowing that the answer has begun — which is exactly what makes the
+     * absence hard to attribute to a cache setting three files away.
+     *
+     * ⚠️ AND IT IS A WARNING, NOT A FAILURE. Nothing is broken: archives download. What is lost
+     * is a number, and calling that an error would teach people to close the report.
+     *
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function progressCheck(): array
+    {
+        $words = ['store' => $this->progress->name()];
+
+        return $this->progress->isShared()
+            ? $this->finding('archives.progress', self::FINE, $words, null)
+            : $this->finding('archives.progress', self::RISKY, $words, $words);
     }
 
     /**

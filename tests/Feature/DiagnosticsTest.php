@@ -259,6 +259,52 @@ class DiagnosticsTest extends TestCase
         );
     }
 
+    // ── A cache two requests can meet in ─────────────────────────────────────
+
+    /**
+     * ⚠️ A FEATURE THAT SILENTLY DOES NOTHING IS WORSE THAN ONE THAT IS ABSENT. Watching a
+     * download needs a cache a second request can read; Laravel offers several that live and die
+     * inside one — `array` and `null` — and on those no progress figure ever appears, with
+     * nothing on the screen to attribute it to a cache setting three files away.
+     */
+    public function test_it_reports_a_cache_no_second_request_can_read(): void
+    {
+        /* The bench runs on the array store, which is the case worth detecting. */
+        $check = $this->check('archives.progress');
+
+        $this->assertSame(DiagnoseSetup::RISKY, $check['level']);
+
+        /* ⚠️ THE STORE IS NAMED, and it is named from the class rather than from the setting: a
+         * host reading back their own configuration has learnt nothing. */
+        $this->assertStringContainsString('array', $check['title']);
+
+        /* ⚠️ AND THE ADVICE POINTS AT THE SETTING THAT FIXES IT, which is the half that asks
+         * somebody to act. */
+        $this->assertStringContainsString('progress_store', (string) $check['recommendation']);
+    }
+
+    /** ⚠️ AND A CACHE THAT CAN BE SHARED IS NOT A FINDING. */
+    public function test_a_cache_two_requests_can_share_is_not_a_finding(): void
+    {
+        $this->app['config']->set('cache.stores.shared', [
+            'driver' => 'file',
+            'path' => sys_get_temp_dir().'/mediahub-diagnostics-cache',
+        ]);
+        $this->app['config']->set('mediahub.archives.progress_store', 'shared');
+
+        $check = $this->check('archives.progress');
+
+        $this->assertSame(DiagnoseSetup::FINE, $check['level']);
+        $this->assertNull($check['recommendation']);
+
+        /*
+         * ⚠️ AND IT STILL SAYS WHAT IT CANNOT SEE. `file` is shared between requests on one
+         * machine and not between two machines behind a load balancer, and the same is true of
+         * `apc` and `octane`. A green line that implied otherwise would be read as a guarantee.
+         */
+        $this->assertStringContainsString('load balancer', $check['detail']);
+    }
+
     // ── Extensions ───────────────────────────────────────────────────────────
 
     public function test_it_looks_for_the_extensions_it_needs(): void

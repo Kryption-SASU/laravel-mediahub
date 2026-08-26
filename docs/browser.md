@@ -255,9 +255,35 @@ two minutes and then jumps to 100%.
 and the last byte received there are network buffers — a few hundred milliseconds, more on a slow
 line. Close, and not the same thing.
 
-⚠️ **It needs a cache two requests can share.** On a host where they cannot, nothing is ever
-`known` and the page falls back to the cookie: no percentage, and the wait ends when the answer
-begins. That is a degradation, not a breakage, and it is why the cookie is still set.
+⚠️ **It needs a cache two requests can meet in — and Laravel offers several that are not.**
+
+```php
+'archives' => [
+    /** Null means the application's own default store. */
+    'progress_store' => null,
+],
+```
+
+| store | a second request can read it |
+|---|---|
+| `redis`, `memcached`, `database`, `dynamodb` | yes, across machines too |
+| `file` | yes on one machine; across servers only if the directory is shared |
+| `apc`, `octane` | yes on one machine, never across servers |
+| `array`, `null` | **no** — they live and die inside one request |
+
+On `array` or `null` the answer is always `known: false`, so no bar ever appears and the page
+falls back to the cookie: the wait ends when the answer begins. Nothing breaks and archives still
+download — which is exactly what makes the missing percentage hard to attribute to a cache
+setting three files away. **The health report says so out loud**, names the store it found, and
+points at the setting that fixes it.
+
+⚠️ **The store is named from its class, not from your configuration.** Reading back your own
+setting teaches nobody anything; "your cache is `array`" when you configured `redis` does.
+
+⚠️ **The count is written at most four times a second, and at most once per megabyte.** Reading
+at 300 MB/s, the byte rule alone would ask the cache to write three hundred times a second —
+three hundred statements a second on a database-backed store, for a figure no eye can follow at
+that rate.
 
 ⚠️ **The ticket is patterned at the route and checked again before it touches a cache key**
 (`[A-Za-z0-9]{8,64}`). It arrives in a request body and ends up concatenated into that key.
