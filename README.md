@@ -13,7 +13,7 @@ That is the whole installation. Every point of contact with your application has
 works as it is: no scoping, no quota, the `public` disk. You replace only what concerns you.
 
 ⚠️ **A ready-made bundle for an application with no build ships on tagged versions only.**
-`composer require kryption/laravel-mediahub:^0.1` carries one; `dev-main` does not, and the
+`composer require kryption/laravel-mediahub:^0.2` carries one; `dev-main` does not, and the
 failure is quiet — the API answers and the page renders nothing. See [delivery](docs/delivery.md).
 
 > **Status: `0.x`, and the number is the promise.** Everything documented here exists and is

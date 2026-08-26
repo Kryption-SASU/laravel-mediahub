@@ -409,17 +409,38 @@ class BrowseApiTest extends TestCase
          * `checksum` and walking the pages reveals whether content you already hold exists
          * elsewhere in the product — at another customer's, in a folder you cannot see. That is
          * a comparison no user is entitled to make.
+         *
+         * ⚠️ THE CHECKSUMS RUN AGAINST THE DATES ON PURPOSE. Given the same order both ways, a
+         * listing that obeyed `checksum` and one that ignored it return the same two rows in the
+         * same sequence, and the assertion holds whatever the query did. Here the two answers
+         * are opposites, so only one of them can pass.
+         *
+         * ⚠️ AND THE DATES ARE WRITTEN DOWN RATHER THAN LEFT TO THE CLOCK. `direction` is parsed
+         * on its own and survives the rejected column, so the fallback is `created_at ASC` — on
+         * which two rows created in the same second tie, leaving the order to the tiebreaker and
+         * the test to luck. It passed for as long as both inserts landed inside one second, and
+         * failed the run where they straddled a boundary — on one job of five, on a commit that
+         * had passed everywhere minutes before.
          */
-        $first = $this->media(['name' => 'First', 'checksum' => str_repeat('a', 64)]);
-        $second = $this->media(['name' => 'Second', 'checksum' => str_repeat('b', 64)]);
+        $first = $this->media([
+            'name' => 'First',
+            'checksum' => str_repeat('b', 64),
+            'created_at' => now()->subMinute(),
+        ]);
+
+        $second = $this->media([
+            'name' => 'Second',
+            'checksum' => str_repeat('a', 64),
+            'created_at' => now(),
+        ]);
 
         $order = array_column(
             $this->getJson('/media?sort=checksum&direction=asc')->assertOk()->json('data.media'),
             'id'
         );
 
-        /* The order returned is the default one — newest first — not the one requested. */
-        $this->assertSame([$second->uuid, $first->uuid], $order);
+        /* Ascending checksum would put `$second` first; the date it fell back to puts `$first`. */
+        $this->assertSame([$first->uuid, $second->uuid], $order);
     }
 
     public function test_the_trash_has_to_be_asked_for_explicitly(): void
