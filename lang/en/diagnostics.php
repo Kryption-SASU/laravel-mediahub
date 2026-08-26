@@ -114,7 +114,48 @@ return [
         ],
     ],
 
+    /*
+     * ⚠️ THE RESOLVED PATH IS ON THE SCREEN, NOT MERELY "FOUND". A host with three ffmpegs and a
+     * configured path has exactly one question — which one is being run — and it is the one a
+     * yes/no cannot answer.
+     */
+    'tools' => [
+
+        'ffmpeg' => [
+            'title' => 'ffmpeg — thumbnails of videos',
+            'ok' => 'Found at :path (:version).',
+            'warning' => 'Not available, so videos keep their type icon instead of a picture. Nothing else is affected: files upload, download and play as before.',
+        ],
+
+        'ffprobe' => [
+            'title' => 'ffprobe — the length of a video',
+            'ok' => 'Found at :path (:version).',
+            'warning' => 'Not available. The frame is still captured, but the second it is asked for cannot be checked against the length of the file — and a capture past the end of a video silently produces nothing at all.',
+        ],
+
+        'pdf' => [
+            'title' => 'The first page of a PDF (:tool)',
+            'ok' => 'Rendered by :tool, found at :path (:version).',
+            'warning' => 'Neither pdftoppm nor gs is available, so documents keep their type icon instead of a picture of their first page.',
+
+            'fix' => 'Install poppler-utils, which provides pdftoppm — or point mediahub.tools.pdf at a renderer you already have. ⚠️ Ghostscript works and is accepted, but poppler is preferred where both are present: gs is a complete PostScript interpreter, which is what earned ImageMagick its worst vulnerabilities, while pdftoppm only ever draws pages.',
+        ],
+
+        'fix_missing' => 'Install :tool, or point mediahub.tools.:tool at it if it lives somewhere the PATH does not reach — a queue worker rarely has the same PATH as a shell.',
+        'fix_configured' => 'mediahub.tools.:tool names a path that is not an executable file here. ⚠️ Nothing was used in its place: falling back to whatever is on the PATH would run a different program than the one you named, and say nothing about it.',
+    ],
+
     'images' => [
+
+        /*
+         * ⚠️ WHAT IT CAN DO, NEVER WHAT IT CLAIMS. `queryFormats()` is an advertisement: it
+         * answers "yes" for MP4, MOV and PDF on machines where all three fail. This package has
+         * been caught by it twice.
+         */
+        'imagick' => [
+            'title' => 'What ImageMagick can actually read here',
+            'ok' => 'Proven by trying, one format at a time: :proven. ⚠️ This is what it can do, not what it advertises — queryFormats() answers "yes" for MP4, MOV and PDF on machines where every one of them fails, because the video formats need a delegate and distributions cut them all in policy.xml.',
+        ],
 
         'memory' => [
             'title' => 'Memory against the largest image accepted',

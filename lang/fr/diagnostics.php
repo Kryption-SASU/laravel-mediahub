@@ -109,7 +109,49 @@ return [
         ],
     ],
 
+    /*
+     * ⚠️ LE CHEMIN RÉSOLU EST À L'ÉCRAN, pas seulement « trouvé ». Un hôte qui a trois ffmpeg et
+     * un chemin configuré n'a qu'une question — lequel tourne réellement — et c'est celle à
+     * laquelle un oui/non ne répond pas.
+     */
+    'tools' => [
+
+        'ffmpeg' => [
+            'title' => 'ffmpeg — miniatures des vidéos',
+            'ok' => 'Trouvé dans :path (:version).',
+            'warning' => 'Absent : les vidéos gardent leur icône de type au lieu d\'une image. Rien d\'autre n\'est touché — les fichiers s\'envoient, se téléchargent et se lisent comme avant.',
+        ],
+
+        'ffprobe' => [
+            'title' => 'ffprobe — la durée d\'une vidéo',
+            'ok' => 'Trouvé dans :path (:version).',
+            'warning' => 'Absent. La capture reste possible, mais la seconde demandée ne peut plus être confrontée à la durée du fichier — et une capture au-delà de la fin d\'une vidéo ne produit rien du tout, en silence.',
+        ],
+
+        'pdf' => [
+            'title' => 'La première page d\'un PDF (:tool)',
+            'ok' => 'Rendue par :tool, trouvé dans :path (:version).',
+            'warning' => 'Ni pdftoppm ni gs n\'est disponible : les documents gardent leur icône de type au lieu d\'une image de leur première page.',
+
+            'fix' => 'Installez poppler-utils, qui fournit pdftoppm — ou pointez mediahub.tools.pdf sur un moteur que vous avez déjà. ⚠️ Ghostscript fonctionne et est accepté, mais poppler est préféré quand les deux sont là : gs est un interpréteur PostScript complet, ce qui a valu à ImageMagick ses failles les plus graves, là où pdftoppm ne fait que dessiner des pages.',
+        ],
+
+        'fix_missing' => 'Installez :tool, ou pointez mediahub.tools.:tool dessus s\'il vit là où le PATH ne va pas — un worker de file d\'attente a rarement le même PATH qu\'un shell.',
+        'fix_configured' => 'mediahub.tools.:tool nomme un chemin qui n\'est pas un fichier exécutable ici. ⚠️ Rien n\'a été utilisé à la place : retomber sur ce que trouve le PATH ferait tourner un autre programme que celui que vous avez nommé, sans rien en dire.',
+    ],
+
     'images' => [
+
+        /*
+         * ⚠️ CE QU'IL SAIT FAIRE, JAMAIS CE QU'IL ANNONCE. `queryFormats()` est une réclame :
+         * il répond « oui » pour MP4, MOV et PDF sur des machines où les trois échouent. Ce
+         * paquet s'y est fait prendre deux fois.
+         */
+        'imagick' => [
+            'title' => 'Ce qu\'ImageMagick sait réellement lire ici',
+            'ok' => 'Éprouvé format par format : :proven. ⚠️ C\'est ce qu\'il sait faire, pas ce qu\'il annonce — queryFormats() répond « oui » pour MP4, MOV et PDF sur des machines où chacun échoue, parce que les formats vidéo passent par un délégué et que les distributions les coupent tous dans policy.xml.',
+        ],
+
 
         'memory' => [
             'title' => 'Mémoire face à la plus grande image acceptée',

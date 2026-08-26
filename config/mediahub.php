@@ -346,6 +346,40 @@ return [
      * ⚠️ DERIVATIVES ARE FILED NEXT TO THEIR ORIGINAL, and their name is derived from it. Any
      * reader that DEDUCES that path by string manipulation would break if they lived elsewhere.
      */
+    /*
+     * ── THE PROGRAMS THIS PACKAGE ASKS THE MACHINE FOR ──────────────────────
+     *
+     * ⚠️ NO PHP EXTENSION HERE CAN DRAW A VIDEO OR A PDF, AND THE ONE THAT CLAIMS TO IS LYING.
+     * `Imagick::queryFormats()` announces MP4, MOV and PDF; the video formats go through a
+     * DELEGATE — ffmpeg itself — and distributions cut every delegate in `policy.xml`, while the
+     * PDF coder is cut outright. Measured on this machine and on the production server.
+     *
+     * ⚠️ NULL MEANS "GO AND LOOK", a path means "use exactly this". A path that is not an
+     * executable file is NOT quietly replaced by whatever is on the PATH: the health report says
+     * the configured one is unusable, because a host who wrote a path and got somebody else's
+     * binary has been told nothing at all.
+     *
+     * ⚠️ AND NOTHING IS EVER RUN THROUGH A SHELL. Arguments are handed to the kernel one by one,
+     * so there is no command line for a file name to be quoted into.
+     */
+    'tools' => [
+        /** Video frames. Installing ffmpeg installs ffprobe with it. */
+        'ffmpeg' => env('MEDIAHUB_FFMPEG'),
+
+        /** ⚠️ USED FOR THE DURATION: a frame asked for at 3s in a 2s video is silently nothing. */
+        'ffprobe' => env('MEDIAHUB_FFPROBE'),
+
+        /*
+         * The first page of a PDF — `pdftoppm` (poppler) or `gs` (ghostscript).
+         *
+         * ⚠️ POPPLER IS PREFERRED WHEN BOTH ARE PRESENT. Ghostscript is a complete PostScript
+         * interpreter, which is precisely what earned ImageMagick its worst vulnerabilities;
+         * `pdftoppm` only ever draws pages. Ghostscript is still accepted — refusing it would
+         * help nobody, since a host that already has it gets its thumbnails either way.
+         */
+        'pdf' => env('MEDIAHUB_PDF'),
+    ],
+
     'conversions' => [
         /*
          * ⚠️ THE QUEUE, BECAUSE DERIVATIVES ARE BUILT OUTSIDE THE REQUEST. `null` takes the

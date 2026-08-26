@@ -7,6 +7,7 @@ namespace Kryption\MediaHub\Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Kryption\MediaHub\Actions\DiagnoseSetup;
 use Kryption\MediaHub\Support\ArchiveCapacity;
+use Kryption\MediaHub\Support\Conversions\ImagickConversionDriver;
 use Kryption\MediaHub\Support\RuntimeLimits;
 use Kryption\MediaHub\Support\ServerRuntime;
 use Kryption\MediaHub\Tests\TestCase;
@@ -303,6 +304,111 @@ class DiagnosticsTest extends TestCase
          * `apc` and `octane`. A green line that implied otherwise would be read as a guarantee.
          */
         $this->assertStringContainsString('load balancer', $check['detail']);
+    }
+
+    // ── The programs a thumbnail depends on ──────────────────────────────────
+
+    /**
+     * ⚠️ THE RESOLVED PATH IS ON THE SCREEN, NOT MERELY "FOUND". A host with three ffmpegs and a
+     * configured path has exactly one question — which one is actually being run — and that is
+     * the one a yes/no cannot answer.
+     */
+    public function test_it_shows_where_each_tool_was_found(): void
+    {
+        $bin = sys_get_temp_dir().'/mediahub-diagnostics-tools';
+        $this->app['files']->ensureDirectoryExists($bin);
+
+        $path = $bin.'/my-ffmpeg';
+        file_put_contents($path, "#!/bin/sh\necho \"ffmpeg version 7.7.7\"\n");
+        chmod($path, 0o755);
+
+        $this->app['config']->set('mediahub.tools.ffmpeg', $path);
+
+        $check = $this->check('tools.ffmpeg');
+
+        $this->assertSame(DiagnoseSetup::FINE, $check['level']);
+        $this->assertStringContainsString($path, $check['detail']);
+        $this->assertStringContainsString('7.7.7', $check['detail']);
+
+        $this->app['files']->deleteDirectory($bin);
+    }
+
+    /**
+     * ⚠️ TWO ABSENCES, TWO SENTENCES. "There is no ffmpeg on this machine" and "you named one and
+     * it is not an executable" call for opposite actions; folded together, the second reads as
+     * the first and somebody installs a package they already have.
+     */
+    public function test_it_tells_a_missing_tool_from_a_path_that_is_wrong(): void
+    {
+        $this->app['config']->set('mediahub.tools.ffmpeg', '/nowhere/at/all/ffmpeg');
+
+        $wrong = (string) $this->check('tools.ffmpeg')['recommendation'];
+
+        /*
+         * ⚠️ THE SEARCH PATH IS NARROWED, because this container HAS ffmpeg. Left alone, the
+         * second half of this test would find it, report a clean line, and compare two
+         * recommendations one of which does not exist — passing for the wrong reason on this
+         * machine and failing on a colleague's.
+         */
+        $empty = sys_get_temp_dir().'/mediahub-no-tools';
+        $this->app['files']->ensureDirectoryExists($empty);
+
+        $wasPath = (string) getenv('PATH');
+        putenv('PATH='.$empty);
+        $_SERVER['PATH'] = $empty;
+
+        try {
+            $this->app['config']->set('mediahub.tools.ffmpeg', null);
+
+            $missing = (string) $this->check('tools.ffmpeg')['recommendation'];
+        } finally {
+            putenv('PATH='.$wasPath);
+            $_SERVER['PATH'] = $wasPath;
+            $this->app['files']->deleteDirectory($empty);
+        }
+
+        $this->assertNotSame($wrong, $missing);
+
+        /* ⚠️ AND EACH SAYS THE THING THE OTHER CANNOT. One points at the setting, the other at
+         * an installation — looking for a word both share would pass on either. */
+        $this->assertStringContainsString('mediahub.tools.ffmpeg', $wrong);
+        $this->assertStringContainsString('Install', $missing);
+    }
+
+    /**
+     * ⚠️ `queryFormats()` IS AN ADVERTISEMENT, NOT A CAPABILITY, and this package has been caught
+     * by it twice — once on HEIC, once on PDF. It answers "yes" for MP4, MOV and PDF on machines
+     * where every one of them fails, so what the report shows is the result of trying.
+     */
+    public function test_it_reports_what_imagick_can_actually_read(): void
+    {
+        if (! extension_loaded('imagick')) {
+            $this->markTestSkipped('No ImageMagick here to be honest about.');
+        }
+
+        $detail = $this->check('images.imagick')['detail'];
+        $driver = $this->app->make(ImagickConversionDriver::class);
+
+        /*
+         * ⚠️ THE REPORT AND THE UPLOADER ANSWER FROM THE SAME PROOF, and that is the assertion.
+         * Checking only that "png" appears would pass just as well on a report that listed
+         * everything ImageMagick advertises — including PDF, which is blocked at the coder on
+         * every Debian, and MP4, which needs a delegate and gets none. What is asserted is that
+         * the list and the driver agree, format by format.
+         */
+        foreach (['image/png', 'image/webp', 'application/pdf'] as $type) {
+            $short = substr($type, (int) strpos($type, '/') + 1);
+
+            $this->assertSame(
+                $driver->supports($type),
+                str_contains($detail, $short),
+                $type.' is reported differently from what the driver will actually do with it.',
+            );
+        }
+
+        /* ⚠️ AND THE SENTENCE SAYS WHY IT IS NOT A LIST OF CLAIMS, because a reader seeing a
+         * short list needs to know it is short on purpose. */
+        $this->assertStringContainsString('queryFormats', $detail);
     }
 
     // ── Extensions ───────────────────────────────────────────────────────────

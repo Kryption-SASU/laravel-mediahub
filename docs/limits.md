@@ -64,10 +64,60 @@ to make.
 | `upload_max_filesize`, `post_max_size` | against `uploads.max_size` — and the second bounds the whole request, file plus fields, so it must be larger than the first rather than equal |
 | `max_execution_time` | against whether `set_time_limit` is still callable — see [below](#the-one-limit-classic-php-actually-hits) |
 | the cache store | whether two requests can meet in it. `array` and `null` cannot, so no download can be watched — nothing breaks, and nothing says why either |
+| `ffmpeg`, `ffprobe`, and a PDF renderer | the **resolved path** and the version of each, or which of the two absences it is — see below |
+| what ImageMagick can **actually** read | proven format by format, never read from `queryFormats()` |
 | the archive ceiling | against what the time budget allows, saying which of the two fixes applies |
 | `zlib.output_compression` | buffering turns streaming into a word rather than a behaviour |
 | `memory_limit` | against `uploads.max_image_pixels` — it is the pixels that exhaust memory, not the file size: fifty megapixels is two hundred megabytes to decode, from a file of six |
 | `zip`, `fileinfo`, and the image driver's extension | the last only a warning, since storing documents without one is a normal state |
+
+## The programs a thumbnail depends on
+
+⚠️ **No PHP extension here can draw a video or a PDF, and the one that claims to is lying.**
+`Imagick::queryFormats()` announces `MP4`, `MOV` and `PDF`. The video formats go through a
+**delegate** — which is ffmpeg itself — and distributions cut every delegate in `policy.xml`;
+the PDF coder is cut outright. Measured on two machines, and it is why the report proves formats
+by trying them rather than by asking.
+
+```php
+'tools' => [
+    'ffmpeg'  => env('MEDIAHUB_FFMPEG'),   // null: go and look
+    'ffprobe' => env('MEDIAHUB_FFPROBE'),
+    'pdf'     => env('MEDIAHUB_PDF'),      // pdftoppm, or gs
+],
+```
+
+**Null means "go and look", a path means "use exactly this".** ⚠️ A configured path that is not
+an executable file is **not** quietly replaced by whatever is on the `PATH`: the report says the
+configured one is unusable. Falling back would run a different program than the one that was
+named and say nothing about it — the host goes on believing their setting is in force, and the
+version on their screen is somebody else's.
+
+That is also why the report shows the **resolved path**, not merely "found": a host with three
+ffmpegs has exactly one question, and a yes/no cannot answer it.
+
+⚠️ **`pdftoppm` is preferred over `gs` when both are present.** Ghostscript is a complete
+PostScript interpreter — a language with loops and file access — which is what earned ImageMagick
+its worst vulnerabilities, to the point where Debian still ships `<policy domain="coder"
+rights="none" pattern="PDF" />` today, on a package thirteen security revisions past the version
+it names. `pdftoppm` only ever draws pages. Ghostscript is still accepted: refusing it would help
+nobody who already has it.
+
+⚠️ **Nothing is run through a shell.** Arguments are handed to the kernel one by one, so a file
+name holding a space, a quote or a semicolon is a file name and nothing else. `escapeshellarg`
+appears nowhere in this package — its presence would mean a command line existed to escape into.
+
+⚠️ **And every run is bounded in time.** A program given a malformed file can sit for ever, and a
+request that never returns holds a worker until the pool manager kills it — a far more expensive
+failure than a missing thumbnail.
+
+### Asking a program its version is not obvious
+
+There is no agreed flag, and **the exit code does not settle it**. Measured: given `-version`,
+`pdftoppm` takes it for a file name, prints `I/O Error: Couldn't open file '-version'` — and
+exits **zero**. So the flags are tried in turn and the answer is judged on its content: a version
+line carries a version. Shipped without that check for an afternoon, the report showed the error
+message where the version belonged.
 
 ## An archive this machine can finish
 
