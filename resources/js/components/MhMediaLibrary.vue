@@ -60,6 +60,18 @@ const props = withDefaults(
          * hands it to nobody. Set it, listen to `use`, and the details panel offers the button.
          */
         selectable?: boolean
+        /**
+         * The kinds of file this screen is allowed to show at all.
+         *
+         * ⚠️ THE CALLER'S DECISION, NOT THE VIEWER'S — which is why it also takes the type
+         * control out of the toolbar. A screen opened as "choose a video" that lets somebody
+         * widen it back to everything has spent a click asking a question and then ignored the
+         * answer; worse, the file they then pick is the one the caller said it could not use.
+         *
+         * ⚠️ AND IT IS EMPTY BY DEFAULT, meaning "everything", because a library reached from a
+         * menu is not choosing anything for anybody.
+         */
+        types?: readonly MediaType[]
         ui?: MhComponentOverride
     }>(),
     {
@@ -69,6 +81,7 @@ const props = withDefaults(
         emptyTitle: undefined,
         emptyDescription: undefined,
         selectable: false,
+        types: () => [],
         ui: undefined,
     },
 )
@@ -210,9 +223,26 @@ async function toggleTrash(): Promise<void> {
 }
 
 onMounted(() => {
-    void browser.refresh()
+    /*
+     * ⚠️ THE RESTRICTION IS APPLIED INSTEAD OF THE FIRST LOAD, not after it. Refreshing and then
+     * filtering asks the server twice and shows the unrestricted answer in between — a flash of
+     * every file on a screen that was opened to choose a video.
+     */
+    void (props.types.length > 0 ? browser.filterByType(props.types) : browser.refresh())
     void quota.refresh()
 })
+
+/*
+ * ⚠️ AND IT FOLLOWS THE CALLER RATHER THAN BEING READ ONCE. The same dialog serves two tabs in
+ * the host application: it stays mounted and the kind changes underneath. Read only at mount, the
+ * second tab would list what the first one asked for.
+ */
+watch(
+    () => props.types,
+    (kinds) => {
+        void browser.filterByType(kinds)
+    },
+)
 
 const chosen = computed<string[]>({
     get: () => selection.media.value,
@@ -398,6 +428,7 @@ function onFiltered(types: MediaType[]): void {
                 :sort="browser.query.value.sort ?? 'created_at'"
                 :direction="browser.query.value.direction ?? 'desc'"
                 :types="browser.query.value.types ?? []"
+                :filterable="types.length === 0"
                 @search="browser.search($event)"
                 @sort="onSorted"
                 @filter="onFiltered"
