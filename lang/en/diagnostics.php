@@ -24,6 +24,31 @@ declare(strict_types=1);
 
 return [
 
+    'runtime' => [
+
+        'sapi' => [
+            'title' => 'How PHP runs here (:sapi)',
+            'ok' => 'Requests are served through the :sapi interface. What bounds a long download here is :timeouts — none of which can be read from inside PHP, which is why the archive budget below is declared rather than detected.',
+            'warning' => 'This report was produced from the command line, which is not the interface that serves your site. Every limit below is the console\'s own: a separate php.ini for it is the normal arrangement, so these numbers may have nothing to do with the ones your visitors meet.',
+
+            'fix' => 'Open the health report from a browser instead, so it reads the runtime that actually answers requests.',
+        ],
+
+        /*
+         * ⚠️ ONE PHRASE PER FAMILY, AND THE POINT OF EACH IS THE FILE IT SENDS SOMEBODY TO.
+         * `request_terminate_timeout` is exact under PHP-FPM and does not exist under mod_php;
+         * an Apache host told to edit `php-fpm.conf` looks for a file they do not have and
+         * concludes the report is about a different product.
+         */
+        'timeouts' => [
+            'fpm' => 'your PHP-FPM pool\'s request_terminate_timeout and your front-end server\'s proxy timeout, whichever is smaller',
+            'module' => 'your front-end server or CDN, if there is one — mod_php sets no limit on how long a request may run, and Apache\'s own Timeout only fires when the connection stalls rather than when it is merely slow',
+            'cgi' => 'the timeout of whatever speaks FastCGI to PHP — nginx\'s fastcgi_read_timeout, or FcgidIOTimeout under mod_fcgid, sixty seconds by default either way',
+            'cli' => 'nothing at all on the command line, which is why this is the one runtime whose figures say least about your site',
+            'unknown' => 'whatever supervises this interface — this package does not recognise it, and would rather say so than send you to a configuration file you do not have',
+        ],
+    ],
+
     'uploads' => [
 
         'upload_max_filesize' => [
@@ -48,8 +73,21 @@ return [
             'ok' => 'Archives are capped at :configured, which this machine is expected to deliver.',
             'warning' => 'The configuration allows :configured, but this machine is only expected to finish :deliverable. Anything larger is refused before it starts — which is deliberate: an archive cut off halfway has already sent its 200, so it downloads and opens with files missing.',
 
-            'declare' => 'Set mediahub.archives.time_budget to the number of seconds a download may really run here — your PHP-FPM request_terminate_timeout and your proxy timeout, whichever is smaller. Neither can be read from inside PHP, so until it is declared the package assumes sixty seconds.',
-            'lower' => 'Either lower mediahub.archives.max_bytes to :deliverable, or raise mediahub.archives.time_budget and the timeouts behind it.',
+            'declare' => 'Set mediahub.archives.time_budget to the number of seconds a download may really run here. What bounds it on this machine is :timeouts. None of that can be read from inside PHP, so until it is declared the package assumes sixty seconds.',
+            'lower' => 'Either lower mediahub.archives.max_bytes to :deliverable, or raise mediahub.archives.time_budget and the timeouts behind it — here, :timeouts.',
+        ],
+
+        'execution_time' => [
+            'title' => 'Time an archive may spend compressing (max_execution_time)',
+            'ok' => 'An archive is not cut short by PHP itself here: :because.',
+            'warning' => 'PHP stops a script after :limit seconds, and set_time_limit is disabled on this machine, so the package cannot lift it for the response it streams. Waiting for storage does not count against that limit, but compressing does — a large archive of files that are not already compressed can reach it, and it is killed after the download has started, leaving a ZIP that opens with files missing.',
+
+            'because' => [
+                'absent' => 'PHP sets no execution time limit',
+                'lifted' => 'the package lifts the :limit-second limit for the response it streams',
+            ],
+
+            'fix' => 'Raise max_execution_time in php.ini, or take set_time_limit out of disable_functions so the package can lift it where it needs to.',
         ],
 
         'buffering' => [

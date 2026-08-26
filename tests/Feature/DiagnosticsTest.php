@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Kryption\MediaHub\Actions\DiagnoseSetup;
 use Kryption\MediaHub\Support\ArchiveCapacity;
 use Kryption\MediaHub\Support\RuntimeLimits;
+use Kryption\MediaHub\Support\ServerRuntime;
 use Kryption\MediaHub\Tests\TestCase;
 
 /**
@@ -360,5 +361,198 @@ class DiagnosticsTest extends TestCase
 
         $this->app['config']->set('mediahub.archives.max_bytes', 999_999_999);
         $this->assertSame(60 * 1024, $this->app->make(ArchiveCapacity::class)->effectiveCeiling());
+    }
+
+    // ── Which PHP is answering ───────────────────────────────────────────────
+
+    /**
+     * ⚠️ THE RUNTIME IS SUBSTITUTED, NOT SIMULATED. `PHP_SAPI` is a compile-time constant and
+     * `disable_functions` is `PHP_INI_SYSTEM`: neither can be produced from inside a test, so
+     * without a seam the only runtime ever exercised would be the console — the one family whose
+     * advice matters least, and the one every other family's wording differs from.
+     */
+    private function standingIn(string $sapi, ?bool $canLift = null): void
+    {
+        $this->app->instance(ServerRuntime::class, new ServerRuntime($sapi, $canLift));
+    }
+
+    /** A ceiling above what the machine is thought able to finish, with nothing declared. */
+    private function adviceOnCapacity(): string
+    {
+        $this->app['config']->set('mediahub.archives.max_bytes', 8 * 1024 * 1024 * 1024);
+        $this->app['config']->set('mediahub.archives.time_budget', 0);
+
+        return (string) $this->check('archives.capacity')['recommendation'];
+    }
+
+    public function test_a_pooled_php_is_sent_to_its_pool_manager(): void
+    {
+        $this->standingIn('fpm-fcgi');
+
+        $this->assertStringContainsString('request_terminate_timeout', $this->adviceOnCapacity());
+    }
+
+    /**
+     * ⚠️ AND MOD_PHP IS NOT SENT THERE, WHICH IS THE WHOLE POINT OF THE LOT. There is no
+     * `php-fpm.conf` on such a machine and no `request_terminate_timeout` in it: somebody
+     * follows the advice, finds neither, and concludes the report is describing a different
+     * product. Advice that names the wrong file is worse than none.
+     */
+    public function test_an_embedded_php_is_not_sent_to_a_pool_it_does_not_have(): void
+    {
+        $this->standingIn('apache2handler');
+
+        $advice = $this->adviceOnCapacity();
+
+        $this->assertStringNotContainsString('request_terminate_timeout', $advice);
+        $this->assertStringNotContainsString('PHP-FPM', $advice);
+
+        /* ⚠️ AND IT STILL SAYS SOMETHING USEFUL. Removing the wrong sentence is only half of it;
+         * a report that answers "it depends" has cost somebody the click. */
+        $this->assertStringContainsString('mod_php', $advice);
+    }
+
+    public function test_a_gateway_php_is_sent_to_whatever_speaks_fastcgi_to_it(): void
+    {
+        $this->standingIn('cgi-fcgi');
+
+        $advice = $this->adviceOnCapacity();
+
+        /*
+         * ⚠️ `cgi-fcgi` IS NOT PHP-FPM, AND THE NAME INVITES THE MISTAKE. Matching interfaces on
+         * substrings would file plain FastCGI under the pool manager and hand it a
+         * `php-fpm.conf` that is not there — so the two are asserted apart rather than merely
+         * one of them asserted present.
+         */
+        $this->assertStringContainsString('fastcgi_read_timeout', $advice);
+        $this->assertStringNotContainsString('request_terminate_timeout', $advice);
+    }
+
+    /**
+     * ⚠️ WHAT IS NOT RECOGNISED IS SAID TO BE UNRECOGNISED. LiteSpeed, FrankenPHP and whatever
+     * comes next each bound a request their own way; guessing at one of them produces exactly
+     * the confident-but-wrong sentence this whole check exists to prevent.
+     */
+    public function test_an_unrecognised_runtime_is_sent_to_no_file_at_all(): void
+    {
+        $this->standingIn('frankenphp');
+
+        $advice = $this->adviceOnCapacity();
+
+        foreach (['request_terminate_timeout', 'fastcgi_read_timeout', 'mod_php', 'php-fpm'] as $named) {
+            $this->assertStringNotContainsString($named, $advice, 'A runtime nobody recognises was sent to '.$named.'.');
+        }
+
+        $this->assertStringContainsString('time_budget', $advice);
+    }
+
+    /**
+     * ⚠️ A REPORT PRODUCED FROM THE CONSOLE DESCRIBES THE CONSOLE. Its memory limit, its
+     * execution time and its extensions are the command line's, and a separate `php.ini` for it
+     * is the normal arrangement rather than an exotic one. Read as a verdict on the server, such
+     * a report is confidently wrong about every number in it — so it says so about itself.
+     */
+    public function test_a_report_produced_from_the_console_says_which_machine_it_describes(): void
+    {
+        $this->standingIn('cli');
+
+        $check = $this->check('runtime.sapi');
+
+        $this->assertSame(DiagnoseSetup::RISKY, $check['level']);
+        $this->assertNotNull($check['recommendation']);
+    }
+
+    public function test_a_report_produced_by_the_runtime_that_serves_the_site_is_not_a_warning(): void
+    {
+        $this->standingIn('fpm-fcgi');
+
+        $check = $this->check('runtime.sapi');
+
+        $this->assertSame(DiagnoseSetup::FINE, $check['level']);
+        $this->assertNull($check['recommendation']);
+
+        /* ⚠️ THE INTERFACE IS NAMED, and the name cannot come from an untranslated key — no key
+         * in this catalogue contains `fpm-fcgi`, which is what makes the assertion worth
+         * writing after a report once shipped showing keys. */
+        $this->assertStringContainsString('fpm-fcgi', $check['title']);
+    }
+
+    /**
+     * ⚠️ ONE PHRASE PER FAMILY, AND A MISSING ONE IS NOT AN ERROR IN LARAVEL — IT IS THE KEY, on
+     * screen, in a sentence telling somebody how to configure their server. The families are
+     * walked rather than sampled because the one that is wrong is always the one nobody tried.
+     */
+    public function test_every_runtime_family_has_wording_in_both_languages(): void
+    {
+        foreach (['fpm-fcgi', 'apache2handler', 'cgi-fcgi', 'cli', 'frankenphp'] as $sapi) {
+            foreach (['en', 'fr'] as $locale) {
+                $this->app->setLocale($locale);
+                $this->standingIn($sapi);
+                $this->app['config']->set('mediahub.archives.max_bytes', 8 * 1024 * 1024 * 1024);
+
+                foreach ($this->report()['checks'] as $check) {
+                    foreach (['title', 'detail', 'recommendation'] as $part) {
+                        $where = $sapi.'/'.$locale.' '.$check['id'].'.'.$part;
+
+                        $this->assertStringNotContainsString('mediahub::', (string) $check[$part], $where.' was never translated.');
+                        $this->assertDoesNotMatchRegularExpression('/:[a-z_]+\b/', (string) $check[$part], $where.' still carries a placeholder.');
+                    }
+                }
+            }
+        }
+    }
+
+    // ── The time an archive may spend compressing ────────────────────────────
+
+    /**
+     * ⚠️ THE LIMIT IS RESTORED, because arming it leaves it armed. A bench that sets thirty
+     * seconds and walks away has armed the timer for every test that follows, and the suite then
+     * dies somewhere else entirely — which reads as a flaky test rather than as this one.
+     */
+    protected function tearDown(): void
+    {
+        ini_set('max_execution_time', '0');
+
+        parent::tearDown();
+    }
+
+    /**
+     * ⚠️ THE ONE CEILING A SHARED HOST ACTUALLY HITS. Waiting on storage does not count against
+     * `max_execution_time` — measured: a script blocked on a pipe outlived a two-second limit by
+     * fifteen, while the same limit killed a busy loop at 2.1 — but compressing does. Deflating
+     * a few gigabytes is processor work, and where `set_time_limit` has been taken away the
+     * package cannot buy itself the time to finish.
+     */
+    public function test_a_time_limit_the_package_cannot_lift_is_reported(): void
+    {
+        $this->standingIn('apache2handler', canLift: false);
+        ini_set('max_execution_time', '30');
+
+        $check = $this->check('archives.execution_time');
+
+        $this->assertSame(DiagnoseSetup::RISKY, $check['level']);
+        $this->assertStringContainsString('30', $check['detail']);
+        $this->assertStringContainsString('set_time_limit', (string) $check['recommendation']);
+    }
+
+    /** ⚠️ AND WHERE IT CAN BE LIFTED, THERE IS NOTHING TO REPORT — the package simply lifts it. */
+    public function test_a_time_limit_the_package_can_lift_is_not_a_finding(): void
+    {
+        $this->standingIn('apache2handler', canLift: true);
+        ini_set('max_execution_time', '30');
+
+        $check = $this->check('archives.execution_time');
+
+        $this->assertSame(DiagnoseSetup::FINE, $check['level']);
+        $this->assertNull($check['recommendation']);
+    }
+
+    /** ⚠️ NOR WHERE THERE IS NO LIMIT AT ALL, even with the function gone. */
+    public function test_no_time_limit_at_all_is_not_a_finding(): void
+    {
+        $this->standingIn('apache2handler', canLift: false);
+        ini_set('max_execution_time', '0');
+
+        $this->assertSame(DiagnoseSetup::FINE, $this->check('archives.execution_time')['level']);
     }
 }

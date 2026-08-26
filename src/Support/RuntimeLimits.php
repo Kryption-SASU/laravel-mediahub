@@ -17,10 +17,10 @@ namespace Kryption\MediaHub\Support;
  * 8388608 — an error of six orders of magnitude that produces a comparison which always passes.
  * Every directive read here goes through the same conversion.
  *
- * ⚠️ AND WHAT CANNOT BE SEEN IS SAID RATHER THAN GUESSED. PHP-FPM's `request_terminate_timeout`
- * and the front-end server's proxy timeout are what really cut a long download, and neither is
- * readable from inside the process. This class reports what it can measure and returns `null`
- * for the rest; the code above it treats `null` as "unknown", never as "unlimited".
+ * ⚠️ AND WHAT CANNOT BE SEEN IS SAID RATHER THAN GUESSED. What really cuts a long download is
+ * set outside the process, and by a different setting under each way of running PHP — see
+ * {@see ServerRuntime}. This class reports what it can measure and returns `null` for the rest;
+ * the code above it treats `null` as "unknown", never as "unlimited".
  */
 final class RuntimeLimits
 {
@@ -81,20 +81,6 @@ final class RuntimeLimits
         $changed = @ini_set($directive, $before);
 
         return $changed !== false;
-    }
-
-    /** ⚠️ `disable_functions` IS COMMON ON SHARED HOSTING, and it is the reason this is asked. */
-    public function canCall(string $function): bool
-    {
-        return function_exists($function)
-            && ! in_array(
-                $function,
-                array_map(
-                    static fn (string $one): string => strtolower(trim($one)),
-                    explode(',', (string) ini_get('disable_functions')),
-                ),
-                true,
-            );
     }
 
     /**
