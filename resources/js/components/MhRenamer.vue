@@ -42,7 +42,6 @@ const t = useMediaText()
 const api = resolveMediaHub(props.client)
 
 const element = ref<HTMLDialogElement | null>(null)
-const field = ref<HTMLInputElement | null>(null)
 const nameId = useId()
 const name = ref('')
 const running = ref(false)
@@ -106,9 +105,13 @@ async function submit(): Promise<void> {
                 <p :class="cls('title')">{{ t('rename.title') }}</p>
 
                 <label :class="cls('label')" :for="nameId">{{ t('rename.field') }}</label>
+                <!-- ⚠️ THE NATIVE ATTRIBUTE, AND THERE IS NOTHING ELSE. A ref was held on this
+                     field for a focus nobody ever asked it for: `showModal()` moves focus into
+                     the dialog and `autofocus` decides where it lands. The ref was read by no
+                     one — and a stricter `tsconfig` than this package's own refused to compile
+                     it, in a host application, which is where it was finally noticed. -->
                 <input
                     :id="nameId"
-                    ref="field"
                     v-model="name"
                     :class="cls('input')"
                     type="text"

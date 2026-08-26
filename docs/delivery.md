@@ -59,7 +59,7 @@ That means:
 
 ```bash
 # Works: a tagged release carries its bundle.
-composer require kryption/laravel-mediahub:^1.0
+composer require kryption/laravel-mediahub:^0.1
 
 # Does NOT give you a standalone screen: no bundle is built for a moving branch.
 composer require kryption/laravel-mediahub:dev-main

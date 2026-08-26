@@ -6,4 +6,15 @@ composer.lock
 .idea
 /coverage.xml
 /coverage
-/dist
+
+# ⚠️ `/dist` IS NOT IGNORED, AND THAT CONTRADICTS AN OTHERWISE SOUND RULE. A Composer package
+# ships what is in the repository and there is no install step that could build anything: an
+# application with no npm can never obtain a file that is not there. Either the bundle is
+# versioned, or the standalone mode does not exist.
+#
+# ⚠️ IT WAS IGNORED UNTIL THE FIRST RELEASE WAS ATTEMPTED, and the two rules had never met: the
+# release workflow refuses any tag whose bundle is missing, so the very first tag would have
+# failed on a file git had been told to forget.
+#
+# ⚠️ AND THE CLAIM IS CHECKED RATHER THAN TRUSTED — `release.yml` rebuilds it from the sources of
+# the tag and compares byte for byte. A versioned artefact nobody checks is worth less than none.

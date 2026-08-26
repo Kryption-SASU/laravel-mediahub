@@ -12,11 +12,15 @@ composer require kryption/laravel-mediahub
 That is the whole installation. Every point of contact with your application has a default that
 works as it is: no scoping, no quota, the `public` disk. You replace only what concerns you.
 
-⚠️ **A ready-made bundle for an application with no build ships on tagged versions only.** `composer require kryption/laravel-mediahub:^1.0` carries one; `dev-main` does not, and the failure is quiet — the API answers and the page renders nothing. See [delivery](docs/delivery.md).
+⚠️ **A ready-made bundle for an application with no build ships on tagged versions only.**
+`composer require kryption/laravel-mediahub:^0.1` carries one; `dev-main` does not, and the
+failure is quiet — the API answers and the page renders nothing. See [delivery](docs/delivery.md).
 
-> **Status: under construction.** Everything documented here exists and is covered by the test
-> suite. What is missing is listed in [Roadmap](#roadmap) — nothing is promised that is not
-> built.
+> **Status: `0.x`, and the number is the promise.** Everything documented here exists and is
+> covered by the test suite; what is missing is listed in [Roadmap](#roadmap). What `0.x` says is
+> that the public surface is still moving — Composer treats every minor as possibly breaking,
+> which is the truth of this package today rather than a formality. Pin a minor if that matters
+> to you.
 
 ---
 
