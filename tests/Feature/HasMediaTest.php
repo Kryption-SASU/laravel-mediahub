@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kryption\MediaHub\Tests\Feature;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Kryption\MediaHub\Exceptions\OperationRejected;
@@ -481,8 +482,16 @@ class HasMediaTest extends TestCase
 
     // ── Reading ──────────────────────────────────────────────────────────────
 
+    /**
+     * ⚠️ TIME IS FROZEN BECAUSE BOTH SIDES STAMP AN EXPIRY. Each call writes `now + ttl`
+     * into the query string, so two calls that straddle a second boundary produce two
+     * different strings and the assertion fails for no reason at all. It did, on a run that
+     * had passed minutes earlier on the very same commit.
+     */
     public function test_the_first_media_url_is_the_signed_one(): void
     {
+        Carbon::setTestNow(Carbon::now());
+
         $host = $this->host();
         $media = $this->existing();
 
@@ -492,6 +501,8 @@ class HasMediaTest extends TestCase
             app(\Kryption\MediaHub\Contracts\UrlGenerator::class)->url($media),
             $host->getFirstMediaUrl('attachments')
         );
+
+        Carbon::setTestNow();
     }
 
     /**
