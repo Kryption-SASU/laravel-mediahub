@@ -6,6 +6,7 @@ namespace Kryption\MediaHub\Actions;
 
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Kryption\MediaHub\Exceptions\OperationRejected;
@@ -51,6 +52,29 @@ final class BuildArchive
         'application/x-rar-compressed', 'application/pdf',
     ];
 
+    /**
+     * THE ONE SIGN THE PAGE THAT ASKED CAN ACTUALLY SEE.
+     *
+     * ⚠️ A DOWNLOAD FIRES NO EVENT ANYWHERE. The request goes into a hidden frame so that a
+     * refusal can be read back, but a response carrying `Content-Disposition: attachment` never
+     * navigates that frame: the browser cancels the navigation and saves the file, and `load`
+     * never comes. The page was left waiting on an event that does not exist, so its spinner
+     * stayed on the selection for ever while the ZIP sat finished in the downloads folder.
+     *
+     * ⚠️ SO THE ANSWER SAYS "I HAVE BEGUN" IN THE ONE CHANNEL THAT SURVIVES A DOWNLOAD. A cookie
+     * set in these headers reaches the browser's jar the moment the response starts, download or
+     * not, and the page can watch for it. It carries no information: only its arrival matters,
+     * which is also why it does not matter whether the host encrypts it on the way out.
+     *
+     * ⚠️ AND THE NAME IS FIXED RATHER THAN CONFIGURABLE. Two sides have to agree on it and only
+     * one of them is PHP; a setting either side could change alone is a setting that will
+     * eventually disagree, silently, in the direction of a spinner nobody can stop.
+     */
+    public const STARTED_COOKIE = 'mediahub_archive_started';
+
+    /** ⚠️ SHORT-LIVED: it is read within a second and cleared by the page that read it. */
+    private const STARTED_COOKIE_SECONDS = 300;
+
     public function __construct(
         private readonly FolderTree $tree,
         private readonly FilesystemFactory $filesystems,
@@ -69,7 +93,7 @@ final class BuildArchive
 
         $name = $this->safeName($fileName ?? (string) $this->config->get('mediahub.archives.file_name', 'medias.zip'));
 
-        return new StreamedResponse(
+        $response = new StreamedResponse(
             function () use ($entries): void {
                 /* ⚠️ INSIDE THE CALLBACK, NOT BEFORE IT. The response is built now and sent
                  * later; clearing buffers while the framework is still assembling it would drop
@@ -100,6 +124,26 @@ final class BuildArchive
                 'X-Accel-Buffering' => 'no',
             ],
         );
+
+        /*
+         * ⚠️ THE ONLY THING THE PAGE WILL EVER HEAR FROM THIS RESPONSE. See STARTED_COOKIE: a
+         * download fires no event in the frame it was asked from, so without this the spinner on
+         * the selection never comes off.
+         *
+         * ⚠️ NOT `httpOnly`, DELIBERATELY. It exists to be read by the script that is waiting for
+         * it, and it carries nothing worth hiding — no identifier, no state, just the fact that
+         * an answer has begun.
+         */
+        $response->headers->setCookie(
+            Cookie::create(self::STARTED_COOKIE)
+                ->withValue('1')
+                ->withPath('/')
+                ->withHttpOnly(false)
+                ->withSameSite(Cookie::SAMESITE_LAX)
+                ->withExpires(time() + self::STARTED_COOKIE_SECONDS),
+        );
+
+        return $response;
     }
 
     /**

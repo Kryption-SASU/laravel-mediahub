@@ -813,6 +813,20 @@ describe('waiting, drawn on the thing being waited for', () => {
 
 describe('asking for an archive', () => {
     /**
+     * ⚠️ EVERY REQUEST HERE IS LET FINISH, AND THAT IS NOT TIDINESS. A run left hanging keeps its
+     * poller alive, and the next test's mark is then eaten by the previous test's request —
+     * which clears it on its way out. Two benches went red for a fault that was entirely in the
+     * benches, which is the most expensive kind.
+     */
+    const started = (): void => {
+        document.cookie = 'mediahub_archive_started=1; path=/'
+    }
+
+    afterEach(() => {
+        document.cookie = 'mediahub_archive_started=; path=/; max-age=0'
+    })
+
+    /**
      * ⚠️ THE ARCHIVE IS NEVER READ INTO THE PAGE, and this is the test that keeps it that way.
      * The server streams the ZIP precisely so that nothing holds it; a `fetch()` followed by a
      * `blob()` puts the whole thing back into the tab's memory and fails on exactly the archives
@@ -825,10 +839,10 @@ describe('asking for an archive', () => {
 
         HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
             submitted.push(this)
+            started()
         }
 
-        void actionOn(api, 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
-        await nextTick()
+        await actionOn(api, 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
 
         expect(submitted).toHaveLength(1)
         expect(submitted[0]?.method).toBe('post')
@@ -846,12 +860,12 @@ describe('asking for an archive', () => {
 
         HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
             submitted.push(this)
+            started()
         }
 
         const selection = { media: ['a', 'b'], folders: ['f1'] }
 
-        void actionOn(fakeClient(), 'archive', selection).run(selection)
-        await nextTick()
+        await actionOn(fakeClient(), 'archive', selection).run(selection)
 
         const fields = [...(submitted[0]?.querySelectorAll('input') ?? [])].map((one) => [
             one.name,
@@ -891,21 +905,94 @@ describe('asking for an archive', () => {
         await expect(running).rejects.toThrow()
     })
 
-    /** ⚠️ AND AN EMPTY FRAME IS THE SUCCESS CASE: the browser took the attachment without
-     * navigating it anywhere. */
-    it('says nothing when the download was handed over', async () => {
-        HTMLFormElement.prototype.submit = function (): void {}
+    /**
+     * ⚠️ A DOWNLOAD FIRES NO EVENT, AND THIS IS THE TEST THAT SAYS SO. The browser cancels the
+     * frame's navigation and saves the file, so `load` never comes: waiting for it settled the
+     * promise on refusals and hung on every success. The spinner then stayed on the selection
+     * with the ZIP already finished in the downloads folder — reported from a real screen.
+     *
+     * ⚠️ AND THE BENCH THAT SHOULD HAVE CAUGHT IT DISPATCHED `load` BY HAND, which is precisely
+     * the one thing the browser does not do. It asserted the branch nobody reaches. Nothing here
+     * touches that event: the only thing that arrives is what the response really sends.
+     */
+    it('stops waiting when the answer begins, since a download never fires an event', async () => {
+        HTMLFormElement.prototype.submit = function (): void {
+            /* What the response does the moment it starts, download or not. */
+            document.cookie = 'mediahub_archive_started=1; path=/'
+        }
 
         const selection = { folders: ['f1'] }
         const running = actionOn(fakeClient(), 'archive', selection).run(selection)
 
-        await nextTick()
-
-        const frame = document.querySelector('iframe[name="mh-archive"]') as HTMLIFrameElement
-
-        frame.dispatchEvent(new Event('load'))
-
         await expect(running).resolves.toBeUndefined()
+    })
+
+    /** ⚠️ AND THE MARK IS CLEARED, or the next archive settles on the last one's answer before
+     * the server has been asked anything. */
+    it('clears the mark it was waiting for', async () => {
+        HTMLFormElement.prototype.submit = function (): void {
+            document.cookie = 'mediahub_archive_started=1; path=/'
+        }
+
+        const selection = { folders: ['f1'] }
+
+        await actionOn(fakeClient(), 'archive', selection).run(selection)
+
+        expect(document.cookie).not.toContain('mediahub_archive_started=1')
+    })
+
+    /**
+     * ⚠️ A MARK LEFT OVER FROM BEFORE IS NOT AN ANSWER TO THIS QUESTION. It survives a reload and
+     * a second tab, so without clearing it first the very next archive settles the moment it is
+     * asked for — before the server has been reached at all. The spinner would come off
+     * instantly and a refusal would arrive afterwards, into a screen that had already moved on.
+     */
+    it('does not take a leftover mark for this answer', async () => {
+        vi.useFakeTimers()
+
+        try {
+            document.cookie = 'mediahub_archive_started=1; path=/'
+            HTMLFormElement.prototype.submit = function (): void {}
+
+            const selection = { folders: ['f1'] }
+            let settled = false
+
+            void actionOn(fakeClient(), 'archive', selection)
+                .run(selection)
+                .then(() => {
+                    settled = true
+                })
+
+            await vi.advanceTimersByTimeAsync(2_000)
+
+            expect(settled).toBe(false)
+        } finally {
+            vi.useRealTimers()
+            document.cookie = 'mediahub_archive_started=; path=/; max-age=0'
+        }
+    })
+
+    /**
+     * ⚠️ AND IT LETS GO EVEN WHEN NOTHING IS EVER HEARD. A page left spinning is the fault being
+     * fixed here; keeping it for the case where the cookie goes missing would be the same fault
+     * with a smaller audience. What is not known is reported as nothing rather than as a
+     * failure, because the download may be running perfectly behind a cookie that never arrived.
+     */
+    it('gives up rather than spinning for ever', async () => {
+        vi.useFakeTimers()
+
+        try {
+            HTMLFormElement.prototype.submit = function (): void {}
+
+            const selection = { folders: ['f1'] }
+            const running = actionOn(fakeClient(), 'archive', selection).run(selection)
+
+            await vi.advanceTimersByTimeAsync(121_000)
+
+            await expect(running).resolves.toBeUndefined()
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     /**
@@ -919,10 +1006,10 @@ describe('asking for an archive', () => {
 
         HTMLFormElement.prototype.submit = function (this: HTMLFormElement): void {
             submitted.push(this)
+            started()
         }
 
-        void actionOn(fakeClient(), 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
-        await nextTick()
+        await actionOn(fakeClient(), 'archive', { folders: ['f1'] }).run({ folders: ['f1'] })
 
         expect(submitted[0]?.target).toBe('mh-archive')
 
