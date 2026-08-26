@@ -344,6 +344,25 @@ should, on a screen showing twenty-four of them.
 `MhThumbnail` takes `prefer="preview"` where the large one is wanted, and falls back on its own:
 preview, then thumbnail, then the original for an image.
 
+⚠️ **A published configuration is a snapshot, and it does not grow with the package.**
+`mergeConfigFrom` merges at the **top level only**: a host whose `config/mediahub.php` carries its
+own `conversions` block replaces ours entirely, so a key added later never reaches them. Both role
+names therefore have their answer in the code as well — read without one, `thumbnail_url` came
+back null for every file, and a library that had thumbnails on Monday showed type icons on
+Tuesday.
+
+That is measured rather than feared: it happened in a real application the day the roles were
+added. What a published config does **not** get for free is the second *definition* — no code can
+invent it — so after upgrading:
+
+```php
+// config/mediahub.php, in your own definitions
+'preview' => ['width' => 1024, 'height' => 1024, 'fit' => 'contain',
+              'types' => ['video', 'document']],
+```
+
+then `php artisan mediahub:conversions --type=video --type=document` for what was already stored.
+
 ## A tile says what it is
 
 ⚠️ **A video's thumbnail is a photograph, and that is the problem.** Since a frame is drawn from
