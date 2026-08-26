@@ -96,6 +96,14 @@ return [
             'fix' => 'Raise max_execution_time in php.ini, or take set_time_limit out of disable_functions so the package can lift it where it needs to.',
         ],
 
+        'progress' => [
+            'title' => 'Watching a download in progress (cache store: :store)',
+            'ok' => 'The :store store can be read by a second request, so the library can show how far an archive has got. ⚠️ Behind a load balancer, check that it is shared between your servers as well — apc and octane are per-machine, and file is too unless the directory itself is shared.',
+            'warning' => 'The :store store lives and dies inside one request, so a second one asking how far an archive has got is always told "never heard of it". Archives still download; no progress is ever shown, and nothing on the screen says why.',
+
+            'fix' => 'Point mediahub.archives.progress_store at a store two requests can share — redis, memcached, database or file — or change the application default. Nothing else depends on this: leaving it as it is costs the progress figure and nothing more.',
+        ],
+
         'buffering' => [
             'title' => 'Output buffering (zlib.output_compression)',
             'ok' => 'Off, so archives stream straight to the connection.',

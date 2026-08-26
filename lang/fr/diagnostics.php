@@ -91,6 +91,14 @@ return [
             'fix' => 'Relevez max_execution_time dans php.ini, ou retirez set_time_limit de disable_functions pour que le paquet puisse la lever là où il en a besoin.',
         ],
 
+        'progress' => [
+            'title' => 'Suivi d\'un téléchargement en cours (magasin de cache : :store)',
+            'ok' => 'Le magasin :store se relit depuis une seconde requête : la médiathèque peut donc afficher l\'avancement d\'une archive. ⚠️ Derrière un répartiteur de charge, vérifiez qu\'il est aussi partagé entre vos serveurs — apc et octane sont propres à une machine, et file l\'est aussi tant que le répertoire ne l\'est pas.',
+            'warning' => 'Le magasin :store naît et meurt dans une seule requête : à la question « où en est cette archive ? », une seconde requête s\'entend toujours répondre « jamais entendu parler ». Les archives se téléchargent quand même ; aucun avancement n\'est affiché, et rien à l\'écran n\'en donne la raison.',
+
+            'fix' => 'Pointez mediahub.archives.progress_store sur un magasin partageable entre deux requêtes — redis, memcached, database ou file — ou changez le magasin par défaut de l\'application. Rien d\'autre n\'en dépend : ne rien faire coûte le pourcentage, et rien de plus.',
+        ],
+
         'buffering' => [
             'title' => 'Mise en tampon de la sortie (zlib.output_compression)',
             'ok' => 'Désactivée : les archives partent directement dans la connexion.',

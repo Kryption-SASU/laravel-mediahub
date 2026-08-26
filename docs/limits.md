@@ -63,6 +63,7 @@ to make.
 | which PHP is answering | `fpm-fcgi`, `apache2handler`, `cgi-fcgi`… — every sentence about a timeout below is chosen from it |
 | `upload_max_filesize`, `post_max_size` | against `uploads.max_size` — and the second bounds the whole request, file plus fields, so it must be larger than the first rather than equal |
 | `max_execution_time` | against whether `set_time_limit` is still callable — see [below](#the-one-limit-classic-php-actually-hits) |
+| the cache store | whether two requests can meet in it. `array` and `null` cannot, so no download can be watched — nothing breaks, and nothing says why either |
 | the archive ceiling | against what the time budget allows, saying which of the two fixes applies |
 | `zlib.output_compression` | buffering turns streaming into a word rather than a behaviour |
 | `memory_limit` | against `uploads.max_image_pixels` — it is the pixels that exhaust memory, not the file size: fifty megapixels is two hundred megabytes to decode, from a file of six |

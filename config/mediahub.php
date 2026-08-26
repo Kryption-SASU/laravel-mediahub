@@ -433,6 +433,24 @@ return [
         /** Seconds a streamed response may really run here. 0 = undeclared, and assumed modest. */
         'time_budget' => 0,
 
+        /*
+         * ── WHERE THE PROGRESS OF A DOWNLOAD IS LEFT ────────────────────────
+         *
+         * ⚠️ THE BROWSER NEVER REPORTS A DOWNLOAD TO THE PAGE THAT ASKED FOR IT. No event, no
+         * API: once the attachment is taken, the page is blind. So the only progress anybody can
+         * show is the server's own — and the request that knows it is the one still streaming,
+         * which will not be free to answer until nobody needs telling. It leaves the number in
+         * the cache, and a second request picks it up.
+         *
+         * ⚠️ WHICH ONLY WORKS IF TWO REQUESTS CAN MEET THERE. `array` and `null` live and die
+         * inside one request: the answer would always be "never heard of it", and no bar would
+         * appear. Nothing breaks — the page falls back to knowing that the answer has begun —
+         * but the health report says so out loud rather than leaving you to wonder.
+         *
+         * Null means the application's own default store.
+         */
+        'progress_store' => null,
+
         /**
          * Bytes per second the storage is read at, used to turn the budget into a size.
          *
