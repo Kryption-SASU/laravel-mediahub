@@ -55,6 +55,27 @@ rebase each time anything else lands, and re-runs the whole pipeline for changes
 nothing in common. The cost is real and the benefit is a rare semantic conflict, which the
 suite catches on `main` anyway.
 
+## The tags
+
+Described in [`ruleset-tags.json`](ruleset-tags.json), applied the same way, and it says something
+different from the branch rule on purpose.
+
+- **A tag cannot be created, moved or deleted** by anybody without the admin role.
+- **Admins bypass it**, which is the whole point: releases are the maintainer's to cut.
+
+⚠️ **This is the one place where a bypass is deliberate.** `main` has none — the maintainer goes
+through a pull request like everybody else — because the value there is that no change escapes
+review. A tag is the opposite kind of act: it is the moment somebody takes responsibility for a
+version, and it is not something to delegate.
+
+⚠️ **`update` and `non_fast_forward` matter as much as `creation`.** A published tag that moves is
+worse than one that never existed: Composer caches by version, so half the world keeps the old
+bytes under a name that now means something else, and nothing anywhere reports the difference.
+
+⚠️ **And the rule was proven to refuse, not assumed to.** With the bypass removed for a moment, a
+push of a throwaway tag came back `GH013: Repository rule violations found`. A protection nobody
+has seen say no is a protection nobody knows the shape of.
+
 ## The branch that must stay unprotected
 
 ⚠️ **`cla-signatures` IS NOT PROTECTED, AND THAT IS DELIBERATE.** The contributor agreement
