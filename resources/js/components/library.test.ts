@@ -1147,3 +1147,75 @@ describe('the library screen', () => {
         expect(api.calls.filter((call) => call.method === 'quota').length).toBeGreaterThan(before)
     })
 })
+
+/**
+ * OPENED TO CHOOSE ONE KIND OF FILE.
+ *
+ * ⚠️ THE CALLER'S DECISION, NOT THE VIEWER'S. A host opening this screen as "choose a video" has
+ * already answered the question the type control asks; leaving it there lets somebody widen the
+ * list back to everything and pick the one file the caller said it could not use.
+ */
+describe('a library restricted to some kinds', () => {
+    async function restricted(types: readonly string[]) {
+        const api = fakeClient()
+        api.answerBrowse({ media: [media('m1')], folders: [] })
+
+        const wrapper = mount(MhMediaLibrary, {
+            props: { client: api, types: types as never },
+            attachTo: document.body,
+        })
+
+        await settle()
+
+        return { wrapper, api }
+    }
+
+    /**
+     * ⚠️ ASKED FOR ONCE, WITH THE RESTRICTION ALREADY ON IT. Loading everything and filtering
+     * afterwards asks the server twice and shows the unrestricted answer in between — a flash of
+     * every file on a screen that was opened to choose a video.
+     */
+    it('asks the server for that kind from the first request', async () => {
+        const { api } = await restricted(['video'])
+
+        const browses = api.calls.filter((call) => call.method === 'browse')
+
+        expect(browses).toHaveLength(1)
+        expect((browses[0]?.args[0] as { types?: string[] })?.types).toEqual(['video'])
+    })
+
+    /** ⚠️ AND THE CONTROL THAT WOULD UNDO IT IS NOT THERE. */
+    it('offers no way to widen it back', async () => {
+        const { wrapper } = await restricted(['video'])
+
+        const labels = wrapper.findAll('label').map((one) => one.text())
+
+        expect(labels.join(' ')).not.toContain('Kind')
+    })
+
+    /** ⚠️ AND AN UNRESTRICTED LIBRARY KEEPS ITS CONTROL, which is what makes the absence a
+     * decision rather than a removal. */
+    it('leaves the control alone when nothing was restricted', async () => {
+        const { wrapper } = await library()
+
+        const labels = wrapper.findAll('label').map((one) => one.text())
+
+        expect(labels.join(' ')).toContain('Kind')
+    })
+
+    /**
+     * ⚠️ IT FOLLOWS THE CALLER RATHER THAN BEING READ ONCE. The same dialog serves two tabs in a
+     * host application: it stays mounted and the kind changes underneath. Read only at mount, the
+     * second tab would list what the first one asked for.
+     */
+    it('follows the caller when the kind changes underneath', async () => {
+        const { wrapper, api } = await restricted(['video'])
+
+        await wrapper.setProps({ types: ['image'] as never })
+        await settle()
+
+        const last = api.calls.filter((call) => call.method === 'browse').at(-1)
+
+        expect((last?.args[0] as { types?: string[] })?.types).toEqual(['image'])
+    })
+})

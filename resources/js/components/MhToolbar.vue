@@ -41,6 +41,15 @@ const props = withDefaults(
         sort?: MediaSort
         direction?: 'asc' | 'desc'
         types?: readonly MediaType[]
+        /**
+         * Whether the kind can be changed from here.
+         *
+         * ⚠️ FALSE WHERE THE CALLER HAS ALREADY DECIDED. A screen opened as "choose a video"
+         * that offers a control to widen it back to everything has asked a question and then
+         * ignored the answer — and the file somebody then picks is the one the caller said it
+         * could not use.
+         */
+        filterable?: boolean
         searchLabel?: string
         sortLabel?: string
         typeLabel?: string
@@ -54,6 +63,7 @@ const props = withDefaults(
         sort: 'created_at',
         direction: 'desc',
         types: () => [],
+        filterable: true,
         searchLabel: undefined,
         sortLabel: undefined,
         typeLabel: undefined,
@@ -176,7 +186,7 @@ function onType(event: Event): void {
         </div>
 
         <div :class="cls('filters')">
-            <div :class="cls('group')">
+            <div v-if="filterable" :class="cls('group')">
                 <label :class="cls('label')" :for="typeId">{{ words.type }}</label>
                 <select
                     :id="typeId"

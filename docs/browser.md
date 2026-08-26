@@ -312,6 +312,26 @@ half the installations that exist and earns a refusal for its trouble.
 It needs the file itself, not its identifier, so it arrives through `MhActionContext.subject`. ⚠️
 A screen that renders the menu from identifiers alone loses that one entry, not the menu.
 
+## Opening it to choose one kind of file
+
+```vue
+<MhMediaLibrary selectable :types="['video']" @use="chosen" />
+```
+
+⚠️ **`types` is the caller's decision, not the viewer's** — which is why it also takes the kind
+control out of the toolbar. A screen opened as "choose a video" that lets somebody widen it back
+to everything has spent a click asking a question and then ignored the answer; worse, the file
+they then pick is the one the caller said it could not use.
+
+⚠️ **The restriction replaces the first request rather than following it.** Loading everything and
+filtering afterwards asks the server twice and shows the unrestricted answer in between — a flash
+of every file on a screen opened to choose a video.
+
+⚠️ **And it follows the caller** rather than being read once at mount: a dialog serving two tabs
+stays mounted while the kind changes underneath it.
+
+Empty means everything, which is what a library reached from a menu is.
+
 ## Two sizes, and which screen asks for which
 
 A grid wants a small picture; a panel showing one file wants a large one. ⚠️ **The difference is
