@@ -36,6 +36,7 @@ final class BuildConversions extends Command
     protected $signature = 'mediahub:conversions
         {--missing : Only files that have no derivative at all}
         {--type=* : Restrict to media types — image, video, document, audio}
+        {--scope= : Restrict to one scope key. Every scope by default}
         {--queue : Hand each file to the queue instead of doing the work now}
         {--limit=0 : Stop after this many files. 0 means all of them}';
 
@@ -56,7 +57,31 @@ final class BuildConversions extends Command
         $skipped = 0;
         $impossible = [];
 
-        $query = Media::query()->orderBy(Media::column('id'));
+        /*
+         * ⚠️ EVERY SCOPE, AND IT HAS TO BE SAID OUT LOUD. A media is invisible outside its own
+         * scope, and a terminal has none: run without this, the command answered "0 file(s)
+         * built" on an installation holding fifty-three of them — measured, on a real one, the
+         * day this shipped. It looked like there was nothing to do.
+         *
+         * ⚠️ SO IT USES THE NAMED WAY OUT rather than writing the query by hand. The model offers
+         * `withoutMediaScope()` for exactly this, and a maintenance command going around scoping
+         * silently would be a poor precedent in a package whose whole discipline is that the
+         * scope IS the boundary.
+         */
+        $query = Media::query()->withoutMediaScope()->orderBy(Media::column('id'));
+
+        /*
+         * ⚠️ AND THE TRASH IS PUT BACK, because the way out takes every global scope with it —
+         * soft deletion included. Rebuilding the thumbnails of files somebody is in the middle of
+         * throwing away is work nobody asked for, on the storage they are trying to free.
+         */
+        $query->whereNull(Media::column('deleted_at'));
+
+        $narrowed = (string) ($this->option('scope') ?? '');
+
+        if ($narrowed !== '') {
+            $query->where('scope_key', $narrowed);
+        }
 
         if ($types !== []) {
             $query->whereIn(Media::column('type'), $types);
@@ -98,7 +123,7 @@ final class BuildConversions extends Command
             return true;
         }, Media::column('id'));
 
-        $this->report($done, $skipped, $impossible);
+        $this->report($done, $skipped, $impossible, $narrowed);
 
         return self::SUCCESS;
     }
@@ -117,8 +142,17 @@ final class BuildConversions extends Command
     }
 
     /** @param  array<string, int>  $impossible */
-    private function report(int $done, int $skipped, array $impossible): void
+    private function report(int $done, int $skipped, array $impossible, string $narrowed): void
     {
+        /*
+         * ⚠️ SAID BEFORE THE FIGURES, because it changes what they mean. Somebody running this on
+         * a multi-tenant installation has a right to know it crossed every scope rather than
+         * finding out from a customer.
+         */
+        $this->components->info($narrowed === ''
+            ? 'Walking every scope.'
+            : 'Walking the scope "'.$narrowed.'" only.');
+
         $this->components->info($this->option('queue')
             ? $done.' file(s) handed to the queue.'
             : $done.' file(s) built.');
