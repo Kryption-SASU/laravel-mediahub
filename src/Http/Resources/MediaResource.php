@@ -6,6 +6,7 @@ namespace Kryption\MediaHub\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Kryption\MediaHub\Contracts\ConversionDrivers;
 use Kryption\MediaHub\Contracts\UrlGenerator;
 use Kryption\MediaHub\Enums\ConversionState;
 use Kryption\MediaHub\Models\Media;
@@ -72,6 +73,18 @@ final class MediaResource extends JsonResource
             'url' => $urls->url($this->resource),
             'download_url' => $urls->downloadUrl($this->resource),
             'thumbnail_url' => $this->thumbnail($urls),
+
+            /*
+             * ⚠️ WHETHER A PICTURE COULD BE DRAWN FOR THIS FILE ON THIS SERVER — which the
+             * browser has no way of working out. It is not a property of the type: the same
+             * `video/mp4` is drawable on a machine with ffmpeg and not on one without, and the
+             * screen that offers "build it again" on the second gets a refusal for its trouble.
+             *
+             * ⚠️ AND IT IS ASKED OF THE DRIVERS, so the offer and the answer cannot disagree.
+             * A rule written twice — once here, once in the controller — is a rule that will
+             * differ one day, on the machine where it matters.
+             */
+            'can_draw' => app(ConversionDrivers::class)->for((string) $this->mime_type) !== null,
             'trashed_at' => optional($this->deleted_at)->toAtomString(),
             'created_at' => optional($this->created_at)->toAtomString(),
             'updated_at' => optional($this->updated_at)->toAtomString(),

@@ -151,6 +151,30 @@ and a crafted file can name another input; `-protocol_whitelist file` is what st
 followed. Reading from a URL would be faster and would let a program with a long history of
 parser flaws make requests on our behalf.
 
+### Files that were already there
+
+Derivatives are made once, at upload. A library that predates the tool drawing its thumbnails has
+none for anything already in it, and the alternative was uploading every file a second time —
+doubling the storage and changing every identifier.
+
+```bash
+php artisan mediahub:conversions --missing
+php artisan mediahub:conversions --type=video --queue --limit=50
+```
+
+⚠️ **`--missing` skips what already has a READY one.** A row left at `failed` or `pending` is
+exactly what somebody running this wants to retry; counting it as done would make the flag
+useless on the files it was written for.
+
+⚠️ **And what nothing here can draw is named, not swallowed.** "Nothing can be drawn for these"
+is the answer to the question asked next — why is that folder still all icons — and a silent skip
+sends somebody to the source instead. It is counted by type, once, at the end.
+
+The same thing for one file is `POST {prefix}/{media}/conversions`, which the context menu uses.
+⚠️ **It is done now rather than queued**: the screen shows a spinner on the tile and wants to draw
+the answer when it lets go, and a job handed to a worker would make the entry look broken. The
+work is bounded — the source has a ceiling and each program has a timeout.
+
 ### Asking a program its version is not obvious
 
 There is no agreed flag, and **the exit code does not settle it**. Measured: given `-version`,

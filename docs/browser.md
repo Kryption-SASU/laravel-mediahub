@@ -303,6 +303,31 @@ other's code, so a rename would leave both green and the spinner stuck again.
 browser has the attachment it shows its own progress and tells the page nothing more; a spinner
 claiming to track the transfer would be guessing from the first byte to the last.
 
+⚠️ **"Rebuild the thumbnail" is offered only where the server says it could draw one.** That is
+not a property of the type: the same `video/mp4` is drawable on a machine with ffmpeg and not on
+one without, and the browser has no way of working it out. The payload therefore carries
+`can_draw` per file, and the menu obeys it — written from the type alone, the entry appears on
+half the installations that exist and earns a refusal for its trouble.
+
+It needs the file itself, not its identifier, so it arrives through `MhActionContext.subject`. ⚠️
+A screen that renders the menu from identifiers alone loses that one entry, not the menu.
+
+## A tile says what it is
+
+⚠️ **A video's thumbnail is a photograph, and that is the problem.** Since a frame is drawn from
+it, nothing on the tile says it is a video any more — and the same goes for the first page of a
+PDF, which looks like a picture of a sheet of paper. A badge in the corner puts the nature back.
+
+| | |
+|---|---|
+| a drawn thumbnail on anything but an image | badged with the type's own glyph |
+| an image | **no badge** — there the thumbnail *is* the file, and labelling a photograph as a photograph on every tile is noise |
+| no thumbnail at all | no badge — the tile already draws the type's icon full size |
+
+⚠️ **The badge is announced, not decorative.** It carries the one thing nothing else on the tile
+says: a video and a photograph both offer a file name and a picture. Hidden from assistive
+technology it would restore the nature for some people and not others.
+
 Actions are **data**, so you can add your own — and yours replace ours by `id` rather than
 appearing beside them:
 

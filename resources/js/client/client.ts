@@ -44,6 +44,15 @@ export interface MediaHubClient {
     update(id: string, changes: MediaChanges): Promise<Media>
     copy(id: string, folder?: string | null): Promise<Media>
 
+    /**
+     * Builds this file's derivatives again.
+     *
+     * ⚠️ THEY ARE MADE ONCE, AT UPLOAD, so a library that predates the tool drawing its
+     * thumbnails has none for anything already in it. This is the only way to ask, short of
+     * uploading every file a second time.
+     */
+    regenerate(id: string): Promise<Media>
+
     createFolder(name: string, parent?: string | null): Promise<Folder>
     updateFolder(id: string, changes: FolderChanges): Promise<Folder>
 
@@ -230,6 +239,10 @@ export function createMediaHubClient(options: MediaHubClientOptions): MediaHubCl
 
         async update(id: string, changes: MediaChanges): Promise<Media> {
             return (await request<{ data: Media }>('PATCH', id, changes)).data
+        },
+
+        async regenerate(id: string): Promise<Media> {
+            return (await request<{ data: Media }>('POST', `${id}/conversions`)).data
         },
 
         async copy(id: string, folder?: string | null): Promise<Media> {

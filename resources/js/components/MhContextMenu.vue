@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import type { MediaHubClient, Selection } from '../client'
+import type { Media, MediaHubClient, Selection } from '../client'
 import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
@@ -52,6 +52,12 @@ const props = withDefaults(
          * away as soon as a second was added.
          */
         picking?: boolean
+        /**
+         * ⚠️ THE ONE FILE THE MENU WAS OPENED ON, when there is one. Some entries depend on
+         * what a file IS rather than on how many were ticked — whether this server could draw
+         * a picture for it — and the selection cannot answer that: it holds identifiers.
+         */
+        subject?: Media | null
         client?: MediaHubClient
         ui?: MhComponentOverride
     }>(),
@@ -63,6 +69,7 @@ const props = withDefaults(
         label: undefined,
         trashed: false,
         picking: false,
+        subject: null,
         client: undefined,
         ui: undefined,
     },
@@ -98,7 +105,7 @@ const { available } = useMediaActionList(
     api,
     () => props.selection,
     () => props.actions,
-    () => ({ trashed: props.trashed, picking: props.picking }),
+    () => ({ trashed: props.trashed, picking: props.picking, subject: props.subject }),
     () => props.surfaces,
 )
 

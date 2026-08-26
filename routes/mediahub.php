@@ -7,6 +7,7 @@ use Kryption\MediaHub\Http\Controllers\ArchiveController;
 use Kryption\MediaHub\Http\Controllers\ArchiveProgressController;
 use Kryption\MediaHub\Http\Controllers\BrowseController;
 use Kryption\MediaHub\Http\Controllers\ContentsController;
+use Kryption\MediaHub\Http\Controllers\ConversionsController;
 use Kryption\MediaHub\Http\Controllers\DiagnosticsController;
 use Kryption\MediaHub\Http\Controllers\DownloadController;
 use Kryption\MediaHub\Http\Controllers\FolderController;
@@ -98,6 +99,14 @@ Route::middleware(ValidateSignatureWhenPresent::class)->group(static function ()
 });
 
 Route::post('{media}/copy', [MediaController::class, 'copy'])->name('copy');
+
+/*
+ * ⚠️ DERIVATIVES ARE MADE ONCE, AT UPLOAD, and this is the only way to ask for them again. A
+ * library that predates the tool drawing its thumbnails has none for anything already in it, and
+ * the alternative was uploading every file a second time — doubling the storage and changing
+ * every identifier.
+ */
+Route::post('{media}/conversions', [ConversionsController::class, 'store'])->name('conversions');
 
 Route::get('{media}', [MediaController::class, 'show'])->name('show');
 Route::patch('{media}', [MediaController::class, 'update'])->name('update');

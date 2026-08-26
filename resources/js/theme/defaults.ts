@@ -225,8 +225,21 @@ export const defaultTheme: MhTheme = {
          * choice — a host wanting 4:3, or 16:9 for a video library, changes this one string.
          */
         preview: {
-            layout: 'block w-full overflow-hidden',
+            layout: 'relative block w-full overflow-hidden',
             class: 'aspect-square rounded bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        /*
+         * ⚠️ A VIDEO THUMBNAIL IS A PHOTOGRAPH, and nothing on the tile said otherwise once
+         * frames were drawn. The badge sits in a corner rather than the middle: the middle is
+         * where the picture is, and a play button over it reads as a control to press.
+         */
+        typeBadge: {
+            layout: 'absolute bottom-1 left-1 inline-flex h-5 w-5 items-center justify-center rounded',
+            class: 'bg-black/60 text-white',
+        },
+        typeBadgeIcon: {
+            layout: 'h-3.5 w-3.5',
+            class: '',
         },
         name: {
             layout: 'truncate text-center text-xs',
@@ -918,8 +931,21 @@ export const defaultTheme: MhTheme = {
             class: '',
         },
         preview: {
-            layout: 'block w-full overflow-hidden',
+            layout: 'relative block w-full overflow-hidden',
             class: 'aspect-square rounded bg-[var(--mh-color-muted,#f1f5f9)]',
+        },
+        /*
+         * ⚠️ A VIDEO THUMBNAIL IS A PHOTOGRAPH, and nothing on the tile said otherwise once
+         * frames were drawn. The badge sits in a corner rather than the middle: the middle is
+         * where the picture is, and a play button over it reads as a control to press.
+         */
+        typeBadge: {
+            layout: 'absolute bottom-1 left-1 inline-flex h-5 w-5 items-center justify-center rounded',
+            class: 'bg-black/60 text-white',
+        },
+        typeBadgeIcon: {
+            layout: 'h-3.5 w-3.5',
+            class: '',
         },
         link: {
             layout: 'flex items-center gap-1',
