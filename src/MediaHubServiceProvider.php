@@ -13,6 +13,7 @@ use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Contracts\ConversionDriver;
+use Kryption\MediaHub\Contracts\ConversionDrivers;
 use Kryption\MediaHub\Contracts\DiskResolver;
 use Kryption\MediaHub\Contracts\FileNamer;
 use Kryption\MediaHub\Contracts\PathGenerator;
@@ -22,9 +23,12 @@ use Kryption\MediaHub\Contracts\DuplicateResolver;
 use Kryption\MediaHub\Contracts\MediaScope;
 use Kryption\MediaHub\Contracts\MediaTypeResolver;
 use Kryption\MediaHub\Contracts\QuotaPolicy;
+use Kryption\MediaHub\Support\Conversions\DriverChain;
 use Kryption\MediaHub\Support\Conversions\GdConversionDriver;
 use Kryption\MediaHub\Support\Conversions\ImagickConversionDriver;
 use Kryption\MediaHub\Support\Conversions\NullConversionDriver;
+use Kryption\MediaHub\Support\Conversions\PdfConversionDriver;
+use Kryption\MediaHub\Support\Conversions\VideoConversionDriver;
 use Kryption\MediaHub\Support\DeepUploadValidator;
 use Kryption\MediaHub\Support\DefaultPathGenerator;
 use Kryption\MediaHub\Support\MimeMediaTypeResolver;
@@ -262,6 +266,22 @@ class MediaHubServiceProvider extends ServiceProvider
 
         $this->bindIfAbsent(ConversionDriver::class, fn (): ConversionDriver => $this->imageDriver());
 
+        /*
+         * ⚠️ THE HOST'S DRIVER IS RESOLVED FROM THE CONTAINER, NOT BUILT HERE. A host who binds
+         * their own `ConversionDriver` means it for images, and it must keep coming first — a
+         * chain that reached for `imageDriver()` directly would leave their binding in place and
+         * silently stop using it.
+         *
+         * ⚠️ AND THE ORDER IS THE PRIORITY. Images before video, because ffmpeg reads still
+         * images perfectly well and would otherwise quietly become the image library nobody
+         * chose, with `mediahub.images.driver` doing nothing at all.
+         */
+        $this->bindIfAbsent(ConversionDrivers::class, fn (): ConversionDrivers => new DriverChain(
+            $this->app->make(ConversionDriver::class),
+            $this->app->make(VideoConversionDriver::class),
+            $this->app->make(PdfConversionDriver::class),
+        ));
+
         $this->bindIfAbsent(UrlGenerator::class, fn (): UrlGenerator => $this->urlGenerator());
 
         /*
@@ -365,6 +385,7 @@ class MediaHubServiceProvider extends ServiceProvider
             FileNamer::class,
             UploadValidator::class,
             ConversionDriver::class,
+            ConversionDrivers::class,
             UrlGenerator::class,
             AccessPolicy::class,
             MediaOwner::class,

@@ -6,8 +6,10 @@ namespace Kryption\MediaHub\Actions;
 
 use Illuminate\Contracts\Config\Repository as Config;
 use Kryption\MediaHub\Contracts\ConversionDriver;
+use Kryption\MediaHub\Contracts\ConversionDrivers;
 use Kryption\MediaHub\Contracts\PathGenerator;
 use Kryption\MediaHub\Enums\ConversionState;
+use Kryption\MediaHub\Exceptions\NothingToDraw;
 use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Backends\LegacyConversionMirror;
 use Kryption\MediaHub\Models\Media;
@@ -52,7 +54,7 @@ final class GenerateConversions
     ];
 
     public function __construct(
-        private readonly ConversionDriver $driver,
+        private readonly ConversionDrivers $drivers,
         private readonly PathGenerator $paths,
         private readonly Config $config,
         private readonly LegacyConversionMirror $mirror,
@@ -76,7 +78,15 @@ final class GenerateConversions
 
         $source = (string) $media->mime_type;
 
-        if (! $this->driver->supports($source)) {
+        /*
+         * ⚠️ WHICH DRIVER ANSWERS FOR THIS TYPE, ASKED ONCE AND CARRIED. An image, a video and a
+         * document are drawn by three different things, and only one of them is the library the
+         * host configured. Asking again inside the loop would let a machine that lost a tool
+         * between two definitions produce a set of derivatives that disagree with each other.
+         */
+        $driver = $this->drivers->for($source);
+
+        if ($driver === null) {
             return [];
         }
 
@@ -85,7 +95,12 @@ final class GenerateConversions
         $produced = [];
 
         foreach ($definitions as $name => $definition) {
-            $produced[] = $this->produce($media, (string) $name, (array) $definition, $source);
+            $made = $this->produce($driver, $media, (string) $name, (array) $definition, $source);
+
+            /* ⚠️ A DEFINITION THAT HAD NOTHING TO DRAW ADDS NOTHING to what was produced. */
+            if ($made !== null) {
+                $produced[] = $made;
+            }
         }
 
         return $produced;
@@ -94,9 +109,14 @@ final class GenerateConversions
     /**
      * @param  array<string, mixed>  $definition
      */
-    private function produce(Media $media, string $name, array $definition, string $source): MediaConversion
-    {
-        $output = $this->driver->outputMimeType($source);
+    private function produce(
+        ConversionDriver $driver,
+        Media $media,
+        string $name,
+        array $definition,
+        string $source,
+    ): ?MediaConversion {
+        $output = $driver->outputMimeType($source);
 
         $target = $this->paths->conversion(
             (string) $media->path,
@@ -120,7 +140,7 @@ final class GenerateConversions
         );
 
         try {
-            $result = $this->driver->convert((string) $media->disk, (string) $media->path, $target, $definition);
+            $result = $driver->convert((string) $media->disk, (string) $media->path, $target, $definition);
 
             $row->forceFill([
                 'mime_type' => $result['mime_type'] ?? $output,
@@ -137,6 +157,20 @@ final class GenerateConversions
              * state to tell "pending" from "failed".
              */
             $this->mirror->reflect($media, $name, $target);
+        } catch (NothingToDraw) {
+            /*
+             * ⚠️ NOT EVERY VIDEO TYPE HOLDS A PICTURE, and a "failed" row would claim a fault
+             * where there was no work. The `.wma` is the case that settles it: ASF is one
+             * container for both, so `finfo` answers `video/x-ms-asf` for a purely audio file.
+             *
+             * ⚠️ THE PENDING ROW IS REMOVED RATHER THAN LEFT, because it was created before
+             * anybody could know — and a row stuck at "pending" for ever is the same lie as a
+             * failure, told more slowly.
+             */
+            $row->delete();
+            $this->mirror->forget($media, $name);
+
+            return null;
         } catch (\Throwable $e) {
             /*
              * ⚠️ THE FAILURE IS RECORDED, NOT PROPAGATED. The file is uploaded and served:
