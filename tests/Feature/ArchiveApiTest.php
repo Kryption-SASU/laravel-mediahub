@@ -6,6 +6,7 @@ namespace Kryption\MediaHub\Tests\Feature;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Kryption\MediaHub\Actions\BuildArchive;
 use Kryption\MediaHub\Actions\CreateFolder;
 use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\MediaScope;
@@ -428,6 +429,61 @@ class ArchiveApiTest extends TestCase
         $this->refuseDownloads();
 
         $this->getJson('/media/'.$media->uuid)->assertOk();
+    }
+
+    // ── Saying that the answer has begun ─────────────────────────────────────
+
+    /**
+     * ⚠️ A DOWNLOAD FIRES NO EVENT IN THE PAGE THAT ASKED FOR IT. The request goes into a hidden
+     * frame so a refusal can be read back, but a response carrying an attachment never navigates
+     * that frame: the browser cancels the navigation and saves the file. The page was left
+     * waiting on a `load` that never comes, so its spinner stayed on the selection while the ZIP
+     * sat finished in the downloads folder — reported from a real screen.
+     *
+     * ⚠️ THE COOKIE IS THE ONE CHANNEL A DOWNLOAD DOES NOT CLOSE. It is set in the response
+     * headers, so it reaches the jar the moment the answer begins, whatever the browser then
+     * does with the body.
+     */
+    public function test_the_answer_says_it_has_begun(): void
+    {
+        $media = $this->media();
+
+        $this->post('/media/archive', ['media' => [$media->uuid]])
+            ->assertOk()
+            ->assertCookie(BuildArchive::STARTED_COOKIE);
+    }
+
+    /**
+     * ⚠️ AND A REFUSAL DOES NOT SAY IT. The page would stop waiting on the mark before reading
+     * the reason out of the frame, and an archive refused for being beyond what this machine can
+     * finish would look, on screen, exactly like one that had started downloading.
+     */
+    public function test_a_refusal_does_not_say_anything_has_begun(): void
+    {
+        $this->app['config']->set('mediahub.archives.max_bytes', 1);
+
+        $media = $this->media();
+
+        $this->post('/media/archive', ['media' => [$media->uuid]])
+            ->assertStatus(422)
+            ->assertCookieMissing(BuildArchive::STARTED_COOKIE);
+    }
+
+    /**
+     * ⚠️ TWO SIDES HAVE TO AGREE ON THAT NAME AND ONLY ONE OF THEM IS PHP. Nothing in a
+     * TypeScript suite can check a PHP constant and nothing in PHP runs the browser's code, so a
+     * rename on either side leaves both suites green and the spinner stuck again — the exact
+     * fault this whole mechanism exists to fix, returning silently.
+     */
+    public function test_the_browser_watches_for_the_name_the_server_sets(): void
+    {
+        $source = (string) file_get_contents(__DIR__.'/../../resources/js/components/archive.ts');
+
+        $this->assertStringContainsString(
+            "const STARTED_COOKIE = '".BuildArchive::STARTED_COOKIE."'",
+            $source,
+            'The browser is watching for a different cookie than the one the server sets.',
+        );
     }
 
     // ── The time the stream gives itself ─────────────────────────────────────

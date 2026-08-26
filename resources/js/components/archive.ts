@@ -17,8 +17,38 @@ import type { MediaHubClient, Selection } from '../client'
  *
  * ⚠️ THE FRAME IS NOT REMOVED WHEN THE DOWNLOAD STARTS. Removing it mid-transfer cancels it in
  * some browsers, so it is taken out on the next request instead — one element per screen, reused.
+ *
+ * ⚠️ AND A DOWNLOAD NEVER FIRES `load` ON THAT FRAME. This is the part that was wrong: the
+ * browser cancels the frame's navigation and saves the file instead, so the event this waited
+ * for simply never came. Only a refusal ever loaded a document — meaning the promise settled on
+ * failure and hung on success, and the spinner stayed on the selection with the ZIP already
+ * sitting finished in the downloads folder. The bench that should have caught it dispatched
+ * `load` by hand, which is the one thing the browser does not do.
+ *
+ * ⚠️ SO SUCCESS IS HEARD THROUGH A COOKIE, the one channel a download does not close. The
+ * response sets it in its headers, so it lands in the jar the moment the answer begins — see
+ * `BuildArchive::STARTED_COOKIE`, whose name is fixed on both sides for exactly this reason.
  */
 const FRAME_NAME = 'mh-archive'
+
+/** Must match `BuildArchive::STARTED_COOKIE`. A test on the PHP side holds the two together. */
+const STARTED_COOKIE = 'mediahub_archive_started'
+
+/**
+ * ⚠️ "THE ANSWER HAS BEGUN" IS ALL ANYONE CAN KNOW, and it is the honest thing to wait for. Once
+ * the browser has taken the attachment it owns the transfer, shows its own progress and tells
+ * this page nothing more — so a spinner that claimed to track the download would be guessing
+ * from the first byte to the last.
+ */
+const POLL_MS = 150
+
+/**
+ * ⚠️ AND THE WAIT ENDS EVEN WHEN NOTHING IS EVER HEARD. A page left spinning is the bug this
+ * file is fixing; repeating it in the failure case would be worse than the failure. What is not
+ * known after this is reported as nothing rather than as a fault, because a download may well be
+ * running perfectly behind a cookie that never arrived.
+ */
+const GIVE_UP_MS = 120_000
 
 export interface ArchiveOutcome {
     /** The server's refusal, when it refused. `null` means the download was handed to the browser. */
@@ -63,10 +93,46 @@ export function requestArchive(
         form.appendChild(hidden('_token', token))
     }
 
+    /* ⚠️ CLEARED BEFORE ASKING, so what is seen afterwards is this answer and not the last one. */
+    forgetStarted()
+
     return new Promise<ArchiveOutcome>((settle) => {
-        frame.onload = (): void => {
-            settle({ reason: refusalIn(frame) })
+        let watch: ReturnType<typeof setInterval> | undefined
+        let deadline: ReturnType<typeof setTimeout> | undefined
+
+        const done = (outcome: ArchiveOutcome): void => {
+            clearInterval(watch)
+            clearTimeout(deadline)
+            forgetStarted()
+            settle(outcome)
         }
+
+        /*
+         * ⚠️ THE FRAME ANSWERS FOR REFUSALS, AND FOR NOTHING ELSE. A response the browser does
+         * not save is one it navigates, which is the 422 with its reason in it.
+         *
+         * ⚠️ AN EMPTY LOAD IS NOT AN ANSWER — it used to be read as success, and that was wrong
+         * twice over. A frame with no source loads `about:blank` on its own, before the form has
+         * even been submitted; and a download leaves the previous document in place. Either way
+         * an empty document says nothing about the request, so only the cookie reports success.
+         */
+        frame.onload = (): void => {
+            const refusal = refusalIn(frame)
+
+            if (refusal !== null) {
+                done({ reason: refusal })
+            }
+        }
+
+        watch = setInterval(() => {
+            if (hasStarted()) {
+                done({ reason: null })
+            }
+        }, POLL_MS)
+
+        deadline = setTimeout(() => {
+            done({ reason: null })
+        }, GIVE_UP_MS)
 
         document.body.appendChild(form)
         form.submit()
@@ -75,9 +141,35 @@ export function requestArchive(
 }
 
 /**
- * ⚠️ A REFUSAL LEAVES A DOCUMENT BEHIND; AN ARCHIVE LEAVES NOTHING. The browser handles an
- * attachment without navigating the frame, so an empty — or unreadable — document is the success
- * case and is reported as one.
+ * Whether the answer has begun.
+ *
+ * ⚠️ THE NAME IS NOT ENOUGH: A DELETED COOKIE CAN KEEP IT. Clearing one is itself a `Set-Cookie`
+ * — an empty value with an expiry in the past — and until the store acts on that expiry the name
+ * is still there. Matching on it alone made the next archive settle the instant it was asked
+ * for, on the corpse of the previous one. Caught by a bench written to fail first.
+ *
+ * ⚠️ AND WHAT IS CHECKED IS THAT SOMETHING IS THERE, NEVER WHAT. A Laravel host that encrypts
+ * its outgoing cookies turns the value into ciphertext this script could not match — so nothing
+ * ever compares it, and any non-empty value is the message.
+ */
+function hasStarted(): boolean {
+    return document.cookie.split(';').some((one) => {
+        const [name, ...rest] = one.trim().split('=')
+
+        return name === STARTED_COOKIE && rest.join('=') !== ''
+    })
+}
+
+/** ⚠️ EMPTIED AS WELL AS EXPIRED, so that {@see hasStarted} reads "no" either way. */
+function forgetStarted(): void {
+    document.cookie = STARTED_COOKIE + '=; path=/; max-age=0'
+}
+
+/**
+ * ⚠️ A REFUSAL LEAVES A DOCUMENT BEHIND; NOTHING ELSE HERE DOES. An empty or unreadable document
+ * is not a success — it is a frame that has loaded its own `about:blank`, or one the browser
+ * left alone while it saved an attachment. It answers `null`, which the caller reads as "say
+ * nothing yet" rather than as "done".
  */
 function refusalIn(frame: HTMLIFrameElement): string | null {
     try {

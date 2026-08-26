@@ -203,6 +203,31 @@ streaming. Same origin means the frame can be read, so a refusal — an archive 
 server can finish — comes back and is raised like any other failure instead of filling a blank
 tab with JSON.
 
+⚠️ **A download fires no event, so success is heard through a cookie.** The browser cancels the
+frame's navigation and saves the file: `load` never comes, and an empty frame is no evidence of
+anything — a frame with no source loads `about:blank` on its own before the form is even
+submitted. So the response announces itself in its headers, with a cookie
+(`mediahub_archive_started`) that reaches the jar the moment the answer begins, download or not.
+The page watches for it, clears it, and stops showing the selection as busy.
+
+Shipped without it, the spinner stayed on the selection for ever while the ZIP sat finished in
+the downloads folder.
+
+| | |
+|---|---|
+| the frame loads a JSON document | a refusal — raised, with the server's `reason` |
+| the cookie appears | the answer has begun; the browser owns the transfer from here |
+| neither, after two minutes | the wait ends anyway and says nothing: a page left spinning is the fault this exists to prevent |
+
+⚠️ **Only the cookie's presence is read, never its value**, so it does not matter whether the
+host encrypts its outgoing cookies. And **the name is fixed on both sides** — a PHP test holds
+the constant and the TypeScript together, because nothing else could: neither suite can run the
+other's code, so a rename would leave both green and the spinner stuck again.
+
+⚠️ **What is being reported is the wait for the server to begin, not the download.** Once the
+browser has the attachment it shows its own progress and tells the page nothing more; a spinner
+claiming to track the transfer would be guessing from the first byte to the last.
+
 Actions are **data**, so you can add your own — and yours replace ours by `id` rather than
 appearing beside them:
 
