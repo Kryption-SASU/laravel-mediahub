@@ -29,6 +29,7 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           { "context": "Branch naming" },
+          { "context": "Check the contributor agreement" },
           { "context": "PHP 8.2 / Laravel 12.*" },
           { "context": "PHP 8.3 / Laravel 12.*" },
           { "context": "PHP 8.3 / Laravel 13.*" },

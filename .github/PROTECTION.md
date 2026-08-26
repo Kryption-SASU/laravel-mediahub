@@ -31,7 +31,10 @@ from the ruleset in force. The pipeline was green and gated nothing.
 - **`main` cannot be deleted**, and cannot be force-pushed.
 - **Every change arrives through a pull request.** No direct commits, including from the
   maintainer.
-- **All checks must be green** before the merge button unlocks — the eleven listed in the file.
+- **All checks must be green** before the merge button unlocks — the twelve listed in the file,
+  the contributor agreement among them. ⚠️ A check that never reports on some pull requests
+  would block them for ever, so a context is only listed here once it has been seen reporting on
+  a documentation-only change as well as on a code one.
 - **Conversations must be resolved** before merging, so a review comment cannot be merged past
   by accident.
 
