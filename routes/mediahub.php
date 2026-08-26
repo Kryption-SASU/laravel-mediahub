@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Kryption\MediaHub\Http\Controllers\ArchiveController;
+use Kryption\MediaHub\Http\Controllers\ArchiveProgressController;
 use Kryption\MediaHub\Http\Controllers\BrowseController;
 use Kryption\MediaHub\Http\Controllers\ContentsController;
 use Kryption\MediaHub\Http\Controllers\DiagnosticsController;
@@ -63,6 +64,19 @@ Route::patch('folders/{folder}', [FolderController::class, 'update'])->name('fol
  * off beyond a few hundred items.
  */
 Route::post('archive', [ArchiveController::class, 'store'])->name('archive');
+
+/*
+ * ⚠️ A SECOND REQUEST, BECAUSE THE FIRST ONE IS BUSY. The browser tells a page nothing about a
+ * download it has taken over — no event, no API — so the only progress anybody can show is the
+ * one the server can see, and the process that knows it is the one still streaming. It leaves
+ * the number where a second request can pick it up.
+ *
+ * ⚠️ THE TICKET IS THE PAGE'S OWN, AND IT IS PATTERNED HERE AS WELL AS CHECKED FURTHER IN. It
+ * ends up inside a cache key, so it never travels as "whatever was in the URL".
+ */
+Route::get('archive/progress/{ticket}', ArchiveProgressController::class)
+    ->where('ticket', '[A-Za-z0-9]{8,64}')
+    ->name('archive.progress');
 
 /*
  * ⚠️ A `POST` FOR A READ, for the same reason as the archive above: the selection does not

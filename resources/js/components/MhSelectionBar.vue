@@ -58,6 +58,7 @@ const emit = defineEmits<{
     done: [action: MhAction]
     /** ⚠️ See `MhContextMenu`: the act is known here, its place on screen is known there. */
     busy: [selection: Selection | null]
+    progress: [seen: { done: number; total: number } | null]
 }>()
 
 const cls = useMediaTheme('selectionBar', () => props.ui)
@@ -104,6 +105,14 @@ const count = computed(
 watch(
     () => runner.busy.value,
     (selection) => emit('busy', selection),
+)
+
+/* ⚠️ THE FIGURE TRAVELS THE SAME WAY THE MARK DOES, and for the same reason: the
+ * runner clears it in a finally, including after a failure. Emitted from the handler it
+ * would stay on the screen once the act had gone. */
+watch(
+    () => runner.progress.value,
+    (seen) => emit('progress', seen),
 )
 </script>
 

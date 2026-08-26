@@ -208,7 +208,15 @@ describe('archives', () => {
         const request = api.archiveRequest({ media: ['a', 'b'] }, 'selection.zip')
 
         expect(request.url).toBe('/media/archive')
-        expect(request.fields).toEqual({ media: ['a', 'b'], name: ['selection.zip'] })
+
+        /*
+         * ⚠️ THE BRACKETS ARE PART OF THE NAME, AND ONLY ON THE LISTS. `media[]` is what makes
+         * PHP read repeated fields as a list; `name` must not carry them or the server receives
+         * a one-element array where it expects a string. The form that writes these cannot tell
+         * one from the other, and appending `[]` to everything is what it used to do — wrong on
+         * every scalar, and quiet about it because nothing sent one.
+         */
+        expect(request.fields).toEqual({ 'media[]': ['a', 'b'], name: ['selection.zip'] })
         expect(calls).toHaveLength(0)
     })
 })

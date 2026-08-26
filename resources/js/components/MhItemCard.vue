@@ -46,6 +46,15 @@ const props = withDefaults(
          * "is it working?" and the answer to "on what?" are the same mark.
          */
         busy?: boolean
+        /**
+         * A figure to put beside the mark, when the act running can count itself.
+         *
+         * ⚠️ NULL IS THE ORDINARY CASE, and it means "draw the spinner and say nothing". Almost
+         * every act here is over before a number could be read; the archive is the exception,
+         * because the browser reports nothing about a download it has taken over and the server
+         * is the only witness left to ask.
+         */
+        busyLabel?: string | null
         ui?: MhComponentOverride
     }>(),
     {
@@ -55,6 +64,7 @@ const props = withDefaults(
         focused: false,
         picking: false,
         busy: false,
+        busyLabel: null,
         ui: undefined,
     },
 )
@@ -107,6 +117,11 @@ const rootClasses = computed(() =>
                 <circle cx="12" cy="12" r="9" stroke-opacity="0.3" />
                 <path d="M21 12a9 9 0 0 0-9-9" />
             </svg>
+
+            <!-- ⚠️ WRITTEN ONLY WHEN THERE IS SOMETHING TO WRITE. An act that cannot count
+                 itself leaves this out rather than showing a zero, which reads as a download
+                 that has stalled before it started. -->
+            <span v-if="busyLabel" :class="cls('busyLabel')">{{ busyLabel }}</span>
         </span>
 
         <!-- ⚠️ SHOWN BECAUSE IT IS TICKED, not because a pointer is over it. This is the one mark

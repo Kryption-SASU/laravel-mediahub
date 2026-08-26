@@ -139,6 +139,28 @@ const renaming = ref<MhRenameTarget | null>(null)
  */
 const working = ref<Selection | null>(null)
 
+const counting = ref<{ done: number; total: number } | null>(null)
+
+/**
+ * ⚠️ A PERCENTAGE, OR NOTHING AT ALL. Most acts finish before anybody could read a figure and
+ * have nothing to count anyway; the archive is the exception, because the browser says nothing
+ * about a download it has taken over and the server is the only witness left. A bar invented for
+ * the other acts would invite somebody to wait for the end of something nobody is measuring.
+ *
+ * ⚠️ AND IT IS CAPPED AT A HUNDRED. The count is of bytes going into the ZIP, against a weight
+ * read from the records: a file grown on disk since its size was written down would otherwise
+ * put "104 %" on the screen, which reads as a bug in the download rather than in a row.
+ */
+const busyLabel = computed(() => {
+    const seen = counting.value
+
+    if (seen === null || seen.total <= 0) {
+        return null
+    }
+
+    return Math.min(100, Math.round((seen.done / seen.total) * 100)) + ' %'
+})
+
 const busyMedia = computed(() => working.value?.media ?? [])
 const busyFolders = computed(() => working.value?.folders ?? [])
 const menu = ref({ open: false, x: 0, y: 0 })
@@ -479,6 +501,7 @@ function onFiltered(types: MediaType[]): void {
             :trashed="trashed"
             :client="client"
             @busy="working = $event"
+            @progress="counting = $event"
             @clear="selection.clear()"
             @done="refreshAll"
         />
@@ -502,6 +525,7 @@ function onFiltered(types: MediaType[]): void {
                         :picking="picking"
                         :selected="selection.folders.value"
                         :busy="busyFolders"
+                        :busy-label="busyLabel"
                         @open="open"
                         @toggle="selection.toggle('folder', $event.id)"
                         @menu="(folder, where) => openMenu({ folder }, where)"
@@ -515,6 +539,7 @@ function onFiltered(types: MediaType[]): void {
                         :error="browser.error.value"
                         :choosing="picking"
                         :busy="busyMedia"
+                        :busy-label="busyLabel"
                         @current="focused = $event"
                         @activate="focused = $event; emit('open', $event)"
                         @menu="(chosen, where) => openMenu({ media: chosen }, where)"
@@ -561,6 +586,7 @@ function onFiltered(types: MediaType[]): void {
             :y="menu.y"
             :client="client"
             @busy="working = $event"
+            @progress="counting = $event"
             @done="refreshAll"
         />
 

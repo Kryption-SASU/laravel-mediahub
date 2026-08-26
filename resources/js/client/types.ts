@@ -186,3 +186,21 @@ export interface HealthReport {
     ok: boolean
     checks: HealthCheck[]
 }
+
+/**
+ * How far an archive has got, as the SERVER sees it.
+ *
+ * WARNING: THIS IS NOT THE BROWSER'S PROGRESS, and the difference is worth keeping in mind. The
+ * browser never reports a download to the page that asked for it, so what is counted here is the
+ * bytes the server has read into the ZIP. Between its last byte and the browser's there are
+ * network buffers: close, and not the same thing.
+ */
+export interface ArchiveProgress {
+    /** False while the server has not been reached yet, or once the record has expired. */
+    known: boolean
+    /** The weight going IN. A ZIP's own size cannot be known before it is written. */
+    total: number
+    written: number
+    /** Said outright rather than inferred: an unreadable file leaves the count short for ever. */
+    done: boolean
+}

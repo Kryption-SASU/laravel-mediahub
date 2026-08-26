@@ -31,6 +31,15 @@ export interface UseActionRunner {
      * agreed to it.
      */
     busy: ShallowRef<Selection | null>
+    /**
+     * How far the running act has got, when it counts at all.
+     *
+     * ⚠️ SEPARATE FROM `busy` BECAUSE MOST ACTS HAVE NO NUMBER. A spinner is the honest picture
+     * of an act that takes a moment and cannot say where it is; a bar drawn from a made-up
+     * figure is worse than the spinner, because it invites somebody to wait for the end of
+     * something that is not being measured.
+     */
+    progress: ShallowRef<{ done: number; total: number } | null>
     error: ShallowRef<MediaHubError | null>
 
     /** Runs it, or asks first when the action says to. */
@@ -59,6 +68,7 @@ export function useActionRunner(
     const asking = shallowRef<MhConfirmation | null>(null)
     const running = ref(false)
     const busy = shallowRef<Selection | null>(null)
+    const progress = shallowRef<{ done: number; total: number } | null>(null)
     const error = shallowRef<MediaHubError | null>(null)
 
     async function perform(action: MhAction): Promise<void> {
@@ -66,10 +76,18 @@ export function useActionRunner(
 
         running.value = true
         busy.value = acting
+        progress.value = null
         error.value = null
 
         try {
-            await action.run(acting)
+            /*
+             * ⚠️ THE REPORTER IS HANDED IN RATHER THAN POLLED. Only the act itself knows whether
+             * it can count anything at all; one that says nothing leaves the figure null, which
+             * is what the screen reads as "draw a spinner and stop pretending".
+             */
+            await action.run(acting, (done, total) => {
+                progress.value = { done, total }
+            })
             onDone?.(action)
         } catch (thrown) {
             /*
@@ -84,6 +102,7 @@ export function useActionRunner(
         } finally {
             running.value = false
             busy.value = null
+            progress.value = null
         }
     }
 
@@ -92,6 +111,7 @@ export function useActionRunner(
         asking,
         running,
         busy,
+        progress,
         error,
 
         async request(action: MhAction): Promise<void> {

@@ -43,28 +43,65 @@ const STARTED_COOKIE = 'mediahub_archive_started'
 const POLL_MS = 150
 
 /**
- * ⚠️ AND THE WAIT ENDS EVEN WHEN NOTHING IS EVER HEARD. A page left spinning is the bug this
- * file is fixing; repeating it in the failure case would be worse than the failure. What is not
- * known after this is reported as nothing rather than as a fault, because a download may well be
- * running perfectly behind a cookie that never arrived.
+ * ⚠️ THE WAIT ENDS ON SILENCE, NOT ON A TOTAL DURATION. A page left spinning is the fault this
+ * file exists to fix, so something has to end it — but a flat ceiling would cut the honest case
+ * as well, and a two-gigabyte archive over a slow line is exactly the one worth watching. What
+ * is measured is therefore how long nothing has been heard: the count moving is proof enough
+ * that the archive is alive, however long it takes.
+ *
+ * ⚠️ AND WHAT IS NOT KNOWN IS REPORTED AS NOTHING rather than as a fault, because a download may
+ * well be running perfectly behind a server whose count nobody can reach.
  */
-const GIVE_UP_MS = 120_000
+const SILENCE_MS = 120_000
 
 export interface ArchiveOutcome {
     /** The server's refusal, when it refused. `null` means the download was handed to the browser. */
     reason: string | null
 }
 
+/** Told how far the server has got, whenever that changes. */
+export type ArchiveWatcher = (written: number, total: number) => void
+
+/**
+ * ⚠️ THE TICKET IS MADE HERE, BEFORE ANYTHING IS SENT, because the page has to know what to ask
+ * about. The server could have issued one — and then the only way to learn it would be to read
+ * the answer, which is the one thing a download makes impossible.
+ *
+ * ⚠️ AND IT IS RANDOM RATHER THAN COUNTED. Two tabs asking for an archive at the same moment
+ * would otherwise watch each other's progress, and the second one to finish would report the
+ * first one's numbers.
+ */
+function newTicket(): string {
+    const bytes = new Uint8Array(16)
+    const random = globalThis.crypto
+
+    if (random !== undefined && typeof random.getRandomValues === 'function') {
+        random.getRandomValues(bytes)
+    } else {
+        for (let at = 0; at < bytes.length; at += 1) {
+            bytes[at] = Math.floor(Math.random() * 256)
+        }
+    }
+
+    return [...bytes].map((one) => one.toString(16).padStart(2, '0')).join('')
+}
+
 export function requestArchive(
     client: MediaHubClient,
     selection: Selection,
     name?: string,
+    watch?: ArchiveWatcher,
 ): Promise<ArchiveOutcome> {
     if (typeof document === 'undefined') {
         return Promise.resolve({ reason: null })
     }
 
+    const ticket = newTicket()
     const request = client.archiveRequest(selection, name)
+
+    /* ⚠️ A SCALAR, SO NO BRACKETS. `ticket[]` reaches the server as a one-element array, which is
+     * not a string, which is silently no ticket at all — and then no progress, for ever. */
+    request.fields['ticket'] = [ticket]
     const frame = borrowFrame()
     const form = document.createElement('form')
 
@@ -75,10 +112,14 @@ export function requestArchive(
 
     for (const [field, values] of Object.entries(request.fields)) {
         for (const value of values) {
-            /* ⚠️ `media[]` RATHER THAN `media`. A form sends one value per name; the brackets are
-             * what makes PHP read repeated fields as a list, and without them a selection of five
-             * files arrives as one. */
-            form.appendChild(hidden(field + '[]', value))
+            /*
+             * ⚠️ THE NAMES ARRIVE FINISHED, BRACKETS INCLUDED. This used to append `[]` to
+             * everything, which is right for `media` — a form sends one value per name, and the
+             * brackets are what makes PHP read repeats as a list — and wrong for every scalar
+             * beside it: `name[]` reaches the server as an array where a string was expected.
+             * Nothing exercised that field, so it stayed wrong quietly.
+             */
+            form.appendChild(hidden(field, value))
         }
     }
 
@@ -97,14 +138,31 @@ export function requestArchive(
     forgetStarted()
 
     return new Promise<ArchiveOutcome>((settle) => {
-        let watch: ReturnType<typeof setInterval> | undefined
+        let poller: ReturnType<typeof setInterval> | undefined
         let deadline: ReturnType<typeof setTimeout> | undefined
 
+        /** Whether the server's own count has ever answered. */
+        let counted = false
+
+        /** One question at a time: a slow answer must not queue another behind it. */
+        let asking = false
+
+        let heard = -1
+
         const done = (outcome: ArchiveOutcome): void => {
-            clearInterval(watch)
+            clearInterval(poller)
             clearTimeout(deadline)
             forgetStarted()
             settle(outcome)
+        }
+
+        /** ⚠️ RE-ARMED WHENEVER THE COUNT MOVES: the archive is alive, however long it takes. */
+        const listen = (): void => {
+            clearTimeout(deadline)
+
+            deadline = setTimeout(() => {
+                done({ reason: null })
+            }, SILENCE_MS)
         }
 
         /*
@@ -124,15 +182,61 @@ export function requestArchive(
             }
         }
 
-        watch = setInterval(() => {
-            if (hasStarted()) {
+        /*
+         * ⚠️ TWO THINGS ARE WATCHED, AND THE ORDER BETWEEN THEM MATTERS. The server's own count
+         * is the good answer: it says how far along the archive is and, at the end, that it is
+         * finished. The cookie is the fallback for a host whose cache cannot be reached from a
+         * second request — there, nothing will ever be known beyond "it has begun", and that is
+         * still better than a spinner nobody can stop.
+         */
+        const ask = async (): Promise<void> => {
+            if (asking) {
+                return
+            }
+
+            asking = true
+
+            try {
+                const seen = await client.archiveProgress(ticket)
+
+                if (seen.known) {
+                    counted = true
+                    watch?.(seen.written, seen.total)
+
+                    if (seen.written !== heard) {
+                        heard = seen.written
+                        listen()
+                    }
+
+                    if (seen.done) {
+                        done({ reason: null })
+                    }
+
+                    return
+                }
+            } catch {
+                /* ⚠️ A CACHE THAT CANNOT BE REACHED IS NOT A FAILED DOWNLOAD. Falling back to the
+                 * cookie is the whole reason it is still set. */
+            } finally {
+                asking = false
+            }
+
+            /*
+             * ⚠️ THE COOKIE ONLY DECIDES WHILE NOTHING IS COUNTING. It says the answer has begun,
+             * which arrives long before the archive is finished: obeyed once the count is
+             * running, it would end the wait at the first byte — the very fault this is meant to
+             * put right.
+             */
+            if (!counted && hasStarted()) {
                 done({ reason: null })
             }
+        }
+
+        poller = setInterval(() => {
+            void ask()
         }, POLL_MS)
 
-        deadline = setTimeout(() => {
-            done({ reason: null })
-        }, GIVE_UP_MS)
+        listen()
 
         document.body.appendChild(form)
         form.submit()

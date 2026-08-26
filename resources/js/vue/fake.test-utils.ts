@@ -1,4 +1,4 @@
-import type { BrowsePage, Folder, HealthReport, Media, MediaHubClient, Quota } from '../client'
+import type { ArchiveProgress, BrowsePage, Folder, HealthReport, Media, MediaHubClient, Quota } from '../client'
 import { MediaHubError } from '../client'
 
 /**
@@ -16,6 +16,8 @@ export interface FakeClient extends MediaHubClient {
     failWith(error: MediaHubError | null): void
     answerContents(contents: { media: number; folders: number }): void
     answerHealth(report: HealthReport): void
+    /** What the server would say about an archive in flight. Null = never heard of it. */
+    answerProgress(seen: ArchiveProgress | null): void
 }
 
 export function media(id: string, over: Partial<Media> = {}): Media {
@@ -77,6 +79,10 @@ export function fakeClient(): FakeClient {
      * asserting one. What is being reported is the screen's behaviour, not this machine's. */
     let health: HealthReport = { ok: true, checks: [] }
 
+    /* ⚠️ NOTHING KNOWN BY DEFAULT. A fixture that answered "known" unasked would settle
+     * every archive on its first question, and the wait would never be exercised. */
+    let progress: ArchiveProgress | null = null
+
     function record<T>(method: string, args: unknown[], value: T): Promise<T> {
         calls.push({ method, args })
 
@@ -96,6 +102,10 @@ export function fakeClient(): FakeClient {
 
         failWith(error: MediaHubError | null): void {
             failure = error
+        },
+
+        answerProgress(seen: ArchiveProgress | null): void {
+            progress = seen
         },
 
         /* ⚠️ WHAT A SELECTION CARRIES IS THE SERVER'S ANSWER, so a bench that wants to exercise a
@@ -136,12 +146,15 @@ export function fakeClient(): FakeClient {
 
             const fields: Record<string, string[]> = {}
 
+            /* ⚠️ INCLUDING THE BRACKETS, which is where the real one puts them: a fixture that
+             * left them off would let a form writing `field + '[]'` pass, and that form is
+             * exactly what was wrong. */
             if (selection.media !== undefined) {
-                fields['media'] = [...selection.media]
+                fields['media[]'] = [...selection.media]
             }
 
             if (selection.folders !== undefined) {
-                fields['folders'] = [...selection.folders]
+                fields['folders[]'] = [...selection.folders]
             }
 
             if (name !== undefined) {
@@ -149,6 +162,18 @@ export function fakeClient(): FakeClient {
             }
 
             return { url: '/media/archive', fields }
+        },
+
+        /**
+         * ⚠️ "NEVER HEARD OF IT" BY DEFAULT, WHICH IS THE HONEST STARTING STATE. A bench that
+         * said "known" without being told to would have every archive settle on its first
+         * question, and the wait this fixture exists to exercise would never happen. Tests that
+         * want a count set one with `answerProgress`.
+         */
+        archiveProgress: async (ticket) => {
+            calls.push({ method: 'archiveProgress', args: [ticket] })
+
+            return progress ?? { known: false, total: 0, written: 0, done: false }
         },
     }
 }

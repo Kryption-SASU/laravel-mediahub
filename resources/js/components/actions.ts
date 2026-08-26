@@ -108,8 +108,18 @@ export interface MhAction {
      */
     confirm?: MhConfirmation | ((selection: Selection) => MhConfirmation | Promise<MhConfirmation>)
 
-    run(selection: Selection): Promise<unknown>
+    /**
+     * ⚠️ THE SECOND ARGUMENT IS OPTIONAL AND ALMOST NOTHING USES IT. Nearly every act here is
+     * over in a moment and has nothing to report on the way; the archive is the exception, and
+     * it is the exception because the browser refuses to say anything about a download it has
+     * taken over. An act that ignores the reporter simply says nothing, and the screen shows the
+     * spinner it always showed.
+     */
+    run(selection: Selection, report?: MhReport): Promise<unknown>
 }
+
+/** How far an act has got, in whatever unit it counts. */
+export type MhReport = (done: number, total: number) => void
 
 export interface UseMediaActionList {
     /** Everything, in order — including what is currently unavailable. */
@@ -324,8 +334,8 @@ export function defaultActions(
              * the tab's memory — and it would fail on exactly the archives that most needed
              * streaming.
              */
-            run: async (selection) => {
-                const outcome = await requestArchive(client, selection)
+            run: async (selection, report) => {
+                const outcome = await requestArchive(client, selection, undefined, report)
 
                 /* ⚠️ A REFUSAL IS RAISED RATHER THAN SWALLOWED, so it reaches the same place
                  * every other failure on this screen does. The reason is the server's own key,
