@@ -30,6 +30,7 @@ use Kryption\MediaHub\Support\Conversions\ImagickConversionDriver;
 use Kryption\MediaHub\Support\Conversions\NullConversionDriver;
 use Kryption\MediaHub\Support\Conversions\PdfConversionDriver;
 use Kryption\MediaHub\Support\Conversions\VideoConversionDriver;
+use Kryption\MediaHub\Support\HiddenPaths;
 use Kryption\MediaHub\Support\DeepUploadValidator;
 use Kryption\MediaHub\Support\DefaultPathGenerator;
 use Kryption\MediaHub\Support\MimeMediaTypeResolver;
@@ -281,6 +282,12 @@ class MediaHubServiceProvider extends ServiceProvider
          * images perfectly well and would otherwise quietly become the image library nobody
          * chose, with `mediahub.images.driver` doing nothing at all.
          */
+        /*
+         * ⚠️ A SINGLETON BECAUSE IT IS ASKED ONCE PER QUERY. The list does not change while the
+         * process runs, and the scope that reads it runs on every media query the package makes.
+         */
+        $this->app->singleton(HiddenPaths::class, fn ($app): HiddenPaths => new HiddenPaths($app['config']));
+
         $this->bindIfAbsent(ConversionDrivers::class, fn (): ConversionDrivers => new DriverChain(
             $this->app->make(ConversionDriver::class),
             $this->app->make(VideoConversionDriver::class),

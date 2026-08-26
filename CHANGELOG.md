@@ -6,6 +6,33 @@ Notable changes, newest first. This project follows [semantic versioning](https:
 breaking, and that is the honest description of this one: the public surface is still moving.
 Pin a minor if that matters to you.
 
+## 0.2.2
+
+### Added
+
+- **`library.hidden` — the paths the library never shows.** An application stores more than its
+  library, and the two share a table: avatars, the attachments of a private conversation, an
+  image posted in a comment are all media rows and none of them belongs in a file browser. A host
+  had nowhere to say so, and the default of showing everything is the wrong one because it is
+  silent. Measured on one estate before this existed: 87 attachments from private conversations,
+  64 avatars and 13 comment images, listed to every back-office user of the organisation and
+  downloadable by identifier.
+
+  Empty by default — a package cannot know which of a host's paths are private, and guessing
+  would either hide a library or leak a conversation.
+
+  Hidden means hidden rather than merely unlisted: the rule is a scope on the model, so a
+  concealed row is absent from the listing, from a search, from a folder's contents AND from a
+  lookup by identifier. A file one can still fetch by guessing its id is not hidden, it is
+  unadvertised. `withoutMediaScope()` still lifts it, which is what keeps a rebuild or an audit
+  possible.
+
+  Patterns rather than prefixes, and the difference decides real cases: on that estate a personal
+  chat wallpaper and a group's shared one sit in the same folder and are told apart by their name
+  alone. `*` stands for any run of characters. ⚠️ `_` remains one character of anything in the
+  comparison underneath, so a pattern written with an underscore covers a little more than it
+  names — it hides more, never less, which is the direction a rule of this kind should fail in.
+
 ## 0.2.1
 
 Three guards that were not there, found by running the 0.2.0 conversion command over a real
