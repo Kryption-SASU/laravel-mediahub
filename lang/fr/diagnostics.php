@@ -68,7 +68,13 @@ return [
             'ok' => 'Les archives sont plafonnées à :configured, ce que cette machine devrait livrer.',
             'warning' => 'La configuration autorise :configured, alors que cette machine ne devrait finir que :deliverable. Au-delà, c\'est refusé avant de commencer — et c\'est voulu : une archive coupée en cours de route a déjà envoyé son 200, donc elle se télécharge et s\'ouvre avec des fichiers manquants.',
 
-            'declare' => 'Réglez mediahub.archives.time_budget sur le nombre de secondes qu\'un téléchargement peut réellement durer ici. Ce qui le borne sur cette machine, c\'est :timeouts. Rien de tout cela ne se lit depuis PHP : tant que rien n\'est déclaré, le paquet suppose soixante secondes.',
+            /*
+             * ⚠️ DEUX-POINTS PLUTÔT QUE « C'EST », ET CE N'EST PAS UN DÉTAIL DE STYLE. La phrase
+             * accueille cinq compléments différents selon l'environnement, dont « rien du tout
+             * en ligne de commande » : « ce qui le borne, c'est rien du tout » est fautif, et vu
+             * sur le vrai écran. Les deux-points acceptent les cinq sans accord à faire.
+             */
+            'declare' => 'Réglez mediahub.archives.time_budget sur le nombre de secondes qu\'un téléchargement peut réellement durer ici. Ce qui le borne sur cette machine : :timeouts. Rien de tout cela ne se lit depuis PHP : tant que rien n\'est déclaré, le paquet suppose soixante secondes.',
             'lower' => 'Abaissez mediahub.archives.max_bytes à :deliverable, ou relevez mediahub.archives.time_budget et les délais qui sont derrière — ici, :timeouts.',
         ],
 

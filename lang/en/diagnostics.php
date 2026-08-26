@@ -73,7 +73,13 @@ return [
             'ok' => 'Archives are capped at :configured, which this machine is expected to deliver.',
             'warning' => 'The configuration allows :configured, but this machine is only expected to finish :deliverable. Anything larger is refused before it starts — which is deliberate: an archive cut off halfway has already sent its 200, so it downloads and opens with files missing.',
 
-            'declare' => 'Set mediahub.archives.time_budget to the number of seconds a download may really run here. What bounds it on this machine is :timeouts. None of that can be read from inside PHP, so until it is declared the package assumes sixty seconds.',
+            /*
+             * ⚠️ A COLON RATHER THAN "IS", AND IT IS NOT A MATTER OF STYLE. The sentence takes
+             * five different completions depending on the runtime, one of them "nothing at all
+             * on the command line" — which does not follow "what bounds it is". A colon accepts
+             * all five.
+             */
+            'declare' => 'Set mediahub.archives.time_budget to the number of seconds a download may really run here. What bounds it on this machine: :timeouts. None of that can be read from inside PHP, so until it is declared the package assumes sixty seconds.',
             'lower' => 'Either lower mediahub.archives.max_bytes to :deliverable, or raise mediahub.archives.time_budget and the timeouts behind it — here, :timeouts.',
         ],
 
