@@ -260,6 +260,53 @@ class ThumbnailsTest extends TestCase
         );
     }
 
+    /**
+     * ⚠️ A PUBLISHED CONFIGURATION IS A SNAPSHOT, AND IT DOES NOT GROW WITH THE PACKAGE.
+     * `mergeConfigFrom` merges at the top level only: a host whose file carries its own
+     * `conversions` block replaces ours entirely, so a key added later never reaches them.
+     *
+     * ⚠️ THIS IS NOT HYPOTHETICAL. Measured in a real application the day the role names were
+     * added: its published file listed one definition and neither role, so every `thumbnail_url`
+     * in the payload came back null — a library that had thumbnails on Monday showing type icons
+     * on Tuesday, for a key nobody had touched.
+     */
+    public function test_a_configuration_that_predates_the_roles_still_gets_its_thumbnails(): void
+    {
+        $media = $this->upload(SampleImages::bytes('image/png'), 'photo.png');
+
+        /* Exactly what a published file from before this feature leaves behind. */
+        $this->app['config']->set('mediahub.conversions.thumbnail', null);
+        $this->app['config']->set('mediahub.conversions.preview', null);
+
+        $this->getJson('/media/'.$media->uuid)
+            ->assertOk()
+            ->assertJsonPath('data.thumbnail_url', fn ($url): bool => is_string($url) && $url !== '');
+    }
+
+    /**
+     * ⚠️ AND THE TWO ROLES DO NOT FALL BACK TO THE SAME DEFINITION. Answering `thumb` for both
+     * would leave every payload valid, every address resolvable and every picture present — and
+     * the large one would be the small one, blown up to fill a dialog, which is the exact fault
+     * the second definition was added to fix. It would look like nothing had been done.
+     */
+    public function test_a_configuration_that_predates_the_roles_still_gets_the_large_one(): void
+    {
+        $this->needs(ExternalTools::FFMPEG);
+
+        $media = $this->upload($this->fixture('clip.mp4'), 'clip.mp4');
+
+        $this->app['config']->set('mediahub.conversions.thumbnail', null);
+        $this->app['config']->set('mediahub.conversions.preview', null);
+
+        $body = $this->getJson('/media/'.$media->uuid)->assertOk()->json('data');
+
+        $this->assertNotSame($body['thumbnail_url'], $body['preview_url']);
+        $this->assertStringContainsString(
+            (string) $this->thumbnailOf($media, 'preview')->path,
+            (string) $body['preview_url'],
+        );
+    }
+
     /** ⚠️ AND A PHOTOGRAPH ANSWERS NULL for the large one rather than repeating the small one. */
     public function test_a_photograph_has_no_large_address(): void
     {

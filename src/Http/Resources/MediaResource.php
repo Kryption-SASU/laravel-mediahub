@@ -30,6 +30,18 @@ use Kryption\MediaHub\Models\MediaConversion;
 final class MediaResource extends JsonResource
 {
     /**
+     * WHICH DEFINITION EACH ROLE MEANS, when the host's configuration does not say.
+     *
+     * ⚠️ A PUBLISHED CONFIGURATION IS A SNAPSHOT, AND IT DOES NOT GROW WITH THE PACKAGE.
+     * `mergeConfigFrom` merges at the top level only: a host whose file carries its own
+     * `conversions` block replaces ours entirely, so a key added later never reaches them. Every
+     * key read out of an existing block therefore needs its answer in the code as well.
+     *
+     * @var array<string, string>
+     */
+    private const ROLES = ['thumbnail' => 'thumb', 'preview' => 'preview'];
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -157,7 +169,18 @@ final class MediaResource extends JsonResource
             return null;
         }
 
-        $wanted = (string) config('mediahub.conversions.'.$role, '');
+        /*
+         * ⚠️ THE DEFAULT LIVES HERE, NOT ONLY IN THE SHIPPED CONFIGURATION FILE, and that is not
+         * belt and braces — it is the difference between working and not on every host that has
+         * published its config. `mergeConfigFrom` merges at the TOP level: a published file
+         * carrying its own `conversions` block replaces ours entirely, new keys included. Read
+         * without a default, this answered `null` for the role, `null` for the address, and a
+         * library that had thumbnails on Monday showed type icons on Tuesday.
+         *
+         * ⚠️ MEASURED IN A REAL APPLICATION, not reasoned about. The host's config listed one
+         * definition and neither role, so every `thumbnail_url` in the payload was null.
+         */
+        $wanted = (string) (config('mediahub.conversions.'.$role) ?: self::ROLES[$role] ?? '');
 
         if ($wanted === '') {
             return null;
