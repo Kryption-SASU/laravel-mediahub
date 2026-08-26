@@ -824,6 +824,19 @@ describe('building the thumbnail again', () => {
      * the type alone, this entry appears on half the installations that exist and earns a refusal
      * for its trouble — which is what teaches people that the buttons lie.
      */
+    /**
+     * ⚠️ AND NOT ON AN IMAGE, whatever the server can do with one. Its thumbnail is made from the
+     * file itself and nothing about the file can have changed, so the entry would do work nobody
+     * can see — on the one type it would be offered for most often.
+     */
+    it('is not offered on a photograph', () => {
+        const photo = media('m1', { can_draw: true, type: 'image', mime_type: 'image/png' })
+
+        expect(ids(oneFile, { trashed: false, picking: false, subject: photo })).not.toContain(
+            'regenerate',
+        )
+    })
+
     it('is offered only where the server says it could draw something', () => {
         const can = media('m1', { can_draw: true })
         const cannot = media('m1', { can_draw: false })

@@ -424,7 +424,41 @@ return [
          */
         'definitions' => [
             'thumb' => ['width' => 256, 'height' => 256, 'fit' => 'cover'],
+
+            /*
+             * ⚠️ THE ONE A FULL-SIZE VIEW SHOWS, and it exists for files that have no viewable
+             * original. A video and a PDF cannot be put on a screen as they are, so the detail
+             * panel fell back to the thumbnail and blew 256 pixels up to fill a dialog.
+             *
+             * ⚠️ `types` IS WHAT KEEPS IT FROM COSTING EVERYONE. Without it, every photograph in
+             * the library would grow a second large derivative that no screen asks for — double
+             * the conversion work and double the storage, to serve nothing. An image already has
+             * an original worth showing.
+             *
+             * ⚠️ AND `contain` RATHER THAN `cover`. This is the picture somebody opened in order
+             * to look at it; cropping a page or a frame to a square there removes the half they
+             * were trying to read.
+             */
+            'preview' => [
+                'width' => 1024,
+                'height' => 1024,
+                'fit' => 'contain',
+                'types' => ['video', 'document'],
+            ],
         ],
+
+        /*
+         * ── WHICH DEFINITION EACH SCREEN ASKS FOR ───────────────────────────
+         *
+         * ⚠️ NAMED RATHER THAN GUESSED. The payload carries one address per role, and reading
+         * "the first ready derivative" instead was a draw as soon as there were two of them: a
+         * grid could be handed the full-size preview, on some rows and not others, and every
+         * tile would quietly weigh four times what it should.
+         *
+         * A host who calls their definitions `small` and `large` says so here, once.
+         */
+        'thumbnail' => 'thumb',
+        'preview' => 'preview',
     ],
 
     /*

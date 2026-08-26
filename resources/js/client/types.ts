@@ -49,6 +49,15 @@ export interface Media {
     /** `null` while a derivative is being built, and for everything that has none. */
     thumbnail_url: string | null
     /**
+     * A large derivative, for a screen showing ONE file rather than a grid of them.
+     *
+     * ⚠️ NULL FOR MOST FILES, DELIBERATELY. It exists for what has no viewable original —
+     * a video, a document — because a full-size view of those used to blow the 256-pixel
+     * thumbnail up to fill a dialog. An image already has an original worth showing, and
+     * making a second large copy of every photograph would cost storage to serve nothing.
+     */
+    preview_url: string | null
+    /**
      * Whether a picture could be drawn for this file ON THIS SERVER.
      *
      * ⚠️ NOT A PROPERTY OF THE TYPE. The same video is drawable on a machine with ffmpeg

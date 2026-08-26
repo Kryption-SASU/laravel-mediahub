@@ -72,7 +72,20 @@ final class MediaResource extends JsonResource
             'custom_properties' => $this->custom_properties ?? [],
             'url' => $urls->url($this->resource),
             'download_url' => $urls->downloadUrl($this->resource),
-            'thumbnail_url' => $this->thumbnail($urls),
+            'thumbnail_url' => $this->conversionUrl($urls, 'thumbnail'),
+
+            /*
+             * ⚠️ THE ONE A FULL-SIZE VIEW SHOULD SHOW, and it exists for the files that have no
+             * viewable original. A video and a PDF cannot be put on a screen as they are, so the
+             * detail panel fell back to the thumbnail and blew 256 pixels up to fill a dialog —
+             * which is exactly as blurred as it sounds.
+             *
+             * ⚠️ AND IT IS NULL FOR MOST FILES, DELIBERATELY. An image already has an original
+             * worth showing; producing a second large derivative for every photograph in a
+             * library would double the conversion work and the storage to serve a screen that
+             * would not use it.
+             */
+            'preview_url' => $this->conversionUrl($urls, 'preview'),
 
             /*
              * ⚠️ WHETHER A PICTURE COULD BE DRAWN FOR THIS FILE ON THIS SERVER — which the
@@ -125,15 +138,36 @@ final class MediaResource extends JsonResource
      * archive never produce one. It is up to the screen to show a placeholder — serving the
      * original instead would download twenty megabytes for a thumbnail.
      */
-    private function thumbnail(UrlGenerator $urls): ?string
+    /**
+     * THE ADDRESS OF ONE NAMED DERIVATIVE.
+     *
+     * ⚠️ NAMED, AND IT USED TO BE "THE FIRST READY ONE". With a single definition that was the
+     * same thing; with two it is a draw — a grid asking for a thumbnail could be handed the
+     * full-size preview, on some rows and not others, depending on the order the database
+     * returned them. Nothing would look broken: every tile would simply weigh four times what it
+     * should, on a screen showing twenty-four of them.
+     *
+     * ⚠️ AND THE NAME COMES FROM THE CONFIGURATION, because the definitions are the host's. A
+     * host who calls theirs `small` and `large` keeps working by saying so once, rather than by
+     * discovering that two literals somewhere expect `thumb` and `preview`.
+     */
+    private function conversionUrl(UrlGenerator $urls, string $role): ?string
     {
         if (! $this->resource->relationLoaded('conversions')) {
             return null;
         }
 
-        $thumbnail = $this->resource->conversions
-            ->first(static fn (MediaConversion $conversion): bool => $conversion->state === ConversionState::Ready);
+        $wanted = (string) config('mediahub.conversions.'.$role, '');
 
-        return $thumbnail === null ? null : $urls->conversionUrl($thumbnail);
+        if ($wanted === '') {
+            return null;
+        }
+
+        $found = $this->resource->conversions->first(
+            static fn (MediaConversion $conversion): bool => $conversion->state === ConversionState::Ready
+                && (string) $conversion->name === $wanted,
+        );
+
+        return $found === null ? null : $urls->conversionUrl($found);
     }
 }

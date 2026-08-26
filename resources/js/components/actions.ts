@@ -327,6 +327,13 @@ export function defaultActions(
             available: (selection, where) =>
                 onlyFile(selection) !== null
                 && where.subject?.can_draw === true
+                /*
+                 * ⚠️ AND NOT ON AN IMAGE. Its thumbnail is made from the file itself and nothing
+                 * about the file can have changed: the entry would do work nobody can see, on the
+                 * one type where it is offered most often. What it costs is the rare image whose
+                 * thumbnail failed — and that is what `mediahub:conversions --missing` is for.
+                 */
+                && where.subject.type !== 'image'
                 && ordinary(where),
             run: (selection) => client.regenerate(onlyFile(selection)!),
         },

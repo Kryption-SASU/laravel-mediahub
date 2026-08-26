@@ -24,9 +24,19 @@ const props = withDefaults(
          * everything twice; pass `null` there, and the name stays the only announcement.
          */
         alt?: string | null
+        /**
+         * Which derivative to ask for first.
+         *
+         * ⚠️ A GRID WANTS THE SMALL ONE AND A DIALOG WANTS THE LARGE ONE, and the difference
+         * is visible: a panel showing a file on its own used to blow a 256-pixel thumbnail up
+         * to fill itself, which reads as a bad picture rather than as the wrong size being
+         * asked for. Twenty-four tiles asking for the large one would be the same mistake in
+         * the other direction, and heavier.
+         */
+        prefer?: 'thumbnail' | 'preview'
         ui?: MhComponentOverride
     }>(),
-    { size: '3rem', alt: undefined, ui: undefined },
+    { size: '3rem', alt: undefined, prefer: 'thumbnail', ui: undefined },
 )
 
 const cls = useMediaTheme('thumbnail', () => props.ui)
@@ -53,6 +63,12 @@ watch(
 const source = computed<string | null>(() => {
     if (failed.value) {
         return null
+    }
+
+    /* ⚠️ THE LARGE ONE ONLY WHERE IT WAS ASKED FOR, and only where it exists: it is made
+     * for files with no viewable original, so most media have none. */
+    if (props.prefer === 'preview' && props.media.preview_url) {
+        return props.media.preview_url
     }
 
     if (props.media.thumbnail_url) {
