@@ -111,6 +111,46 @@ appears nowhere in this package — its presence would mean a command line exist
 request that never returns holds a worker until the pool manager kills it — a far more expensive
 failure than a missing thumbnail.
 
+### What they draw
+
+```php
+'video' => [
+    /** The second to capture. Zero is the wrong answer — see below. */
+    'frame_at' => 3,
+],
+'tools' => [
+    /** How much will be pulled down for a thumbnail. 0 = no ceiling. */
+    'max_source_bytes' => 209715200,
+],
+```
+
+⚠️ **Zero seconds is the wrong frame.** Films fade in, phone recordings start on a lens cap or a
+ceiling, screen captures on an empty desktop: a library thumbnailed at zero is a grid of black
+squares, which is worse than the type icon it replaced.
+
+⚠️ **And a capture past the end produces nothing at all, silently.** ffmpeg seeks, finds no frame,
+writes no file and exits without complaint. The length is read first and the request brought
+inside it — that is what ffprobe is for here, beyond the report.
+
+⚠️ **A video type is not a promise of a picture.** `.wma` is an ASF container, the same as `.wmv`,
+so `finfo` answers `video/x-ms-asf` for a purely audio file. There is nothing to draw, and the
+pending row is **removed** rather than marked failed: a failure signals a fault, and sends
+somebody looking for one that does not exist.
+
+⚠️ **The PDF page is never cropped**, even though the definition asks for `cover`. A document is
+recognised by its head — the letterhead, the title — and a square crop of a portrait page removes
+exactly that.
+
+⚠️ **The source is pulled down to a local file, streamed, and bounded.** A program reads a path
+and our bytes live on object storage; `$storage->get()` on a five-hundred-megabyte video is five
+hundred megabytes of PHP memory. Past `max_source_bytes` there is no thumbnail rather than a
+transfer nobody asked for — the file still uploads, downloads and plays.
+
+⚠️ **And ffmpeg is never handed an address.** It speaks http, rtmp and a dozen other protocols,
+and a crafted file can name another input; `-protocol_whitelist file` is what stops that being
+followed. Reading from a URL would be faster and would let a program with a long history of
+parser flaws make requests on our behalf.
+
 ### Asking a program its version is not obvious
 
 There is no agreed flag, and **the exit code does not settle it**. Measured: given `-version`,

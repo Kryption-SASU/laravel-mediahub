@@ -28,11 +28,14 @@ use Kryption\MediaHub\ValueObjects\UploadedPayload;
  * it is entrusted with destroys without saying so, and nobody notices before they need the
  * original. Derivatives are EXTRA files.
  *
- * ⚠️ AND A VIDEO PRODUCES NO ROW — not even a "failed" one. A failed row would display an error
- * state for something that was never attempted, and would send someone looking for a failure
- * that does not exist. Nothing failed: there was nothing to do. That is also what the module
- * this package replaces does, where only `is_image($mimeType)` triggers the work and a video
- * receives a static placeholder.
+ * ⚠️ AND A FILE WITH NO PICTURE IN IT PRODUCES NO ROW — not even a "failed" one. A failed row
+ * would display an error state for something that was never attempted, and would send someone
+ * looking for a failure that does not exist. Nothing failed: there was nothing to do.
+ *
+ * ⚠️ WHICH IS NOT THE SAME STATEMENT AS "A VIDEO PRODUCES NO ROW", and it used to be. Since
+ * ffmpeg was brought in, a real video gets a frame — see {@see ThumbnailsTest}. What the samples
+ * here carry is a container and no stream: the right magic number and nothing behind it, which
+ * is precisely what makes them the fixture for this rule and useless for the other one.
  */
 class GenerateConversionsTest extends TestCase
 {
@@ -109,7 +112,12 @@ class GenerateConversionsTest extends TestCase
 
     /**
      * ⚠️ NOT EVEN A "FAILED" ROW. That is a decision, not a consequence: recording a failure for
-     * a video would send someone looking for a fault where there was nothing to attempt.
+     * a container with no stream in it would send someone looking for a fault where there was
+     * nothing to attempt.
+     *
+     * ⚠️ AND THE `.wma` IS WHY IT STILL MATTERS with ffmpeg installed. ASF is one container for
+     * both, so `finfo` answers `video/x-ms-asf` for a purely audio file: a video type with no
+     * video in it, on every machine, for ever.
      */
     public function test_no_failed_row_is_left_behind_a_video(): void
     {

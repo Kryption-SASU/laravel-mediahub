@@ -121,6 +121,13 @@ jobs:
           extensions: fileinfo, json, mbstring
           coverage: none
 
+      # ⚠️ WITHOUT THESE, THE THUMBNAIL BENCHES SKIP — and a skipped bench is a green tick that
+      # asserts nothing. A machine without them is a supported machine, which is exactly why the
+      # benches skip rather than fail; it is also why the pipeline has to be one that has them,
+      # or the whole feature is untested on every pull request.
+      - name: The programs a thumbnail needs
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
+
       - name: Install dependencies
         run: |
           composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
@@ -153,6 +160,9 @@ jobs:
           extensions: ${{ matrix.extensions }}
           coverage: none
 
+      - name: The programs a thumbnail needs
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
+
       - name: Install dependencies
         run: composer update --prefer-dist --no-interaction --no-progress
 
@@ -184,6 +194,9 @@ jobs:
           php-version: '8.4'
           extensions: fileinfo, json, mbstring, gd
           coverage: pcov
+
+      - name: The programs a thumbnail needs
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
 
       - name: Install dependencies
         run: composer update --prefer-dist --no-interaction --no-progress

@@ -378,6 +378,30 @@ return [
          * help nobody, since a host that already has it gets its thumbnails either way.
          */
         'pdf' => env('MEDIAHUB_PDF'),
+
+        /*
+         * ⚠️ HOW MUCH THIS MACHINE WILL PULL DOWN FOR A THUMBNAIL. A program reads a path, and
+         * our bytes live on object storage: making a 256-pixel image out of a two-gigabyte video
+         * means fetching two gigabytes first. Past this, there is no thumbnail rather than a
+         * transfer nobody asked for — the file still uploads, downloads and plays.
+         *
+         * Zero means no ceiling. Two hundred megabytes by default.
+         */
+        'max_source_bytes' => 209715200,
+    ],
+
+    'video' => [
+        /*
+         * ⚠️ THE SECOND TO CAPTURE, AND ZERO IS THE WRONG ANSWER. Films fade in, phone
+         * recordings start on a lens cap or a ceiling, screen captures on an empty desktop: a
+         * library thumbnailed at zero seconds is a grid of black squares, which is worse than
+         * the type icon it replaced.
+         *
+         * ⚠️ AND IT IS BROUGHT INSIDE THE FILE BEFORE USE. Asked past the end, ffmpeg finds no
+         * frame, writes nothing and exits without complaint — a failure with no failure anywhere.
+         * That is what ffprobe is for here.
+         */
+        'frame_at' => 3,
     ],
 
     'conversions' => [
