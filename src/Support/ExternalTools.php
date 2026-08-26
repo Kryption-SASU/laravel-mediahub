@@ -62,9 +62,16 @@ final class ExternalTools
     /** @var array<string, array{path: string|null, configured: bool}> */
     private array $found = [];
 
+    /**
+     * ⚠️ WHETHER PROGRAMS CAN BE RUN IS AN ARGUMENT, NOT A CALL BURIED IN A METHOD. `proc_open`
+     * is either compiled in or named in `disable_functions`; neither changes while the process
+     * runs, and neither can be arranged from a test. Describing the answer is what makes the
+     * behaviour that depends on it provable on a machine where the real answer is the other one.
+     */
     public function __construct(
         private readonly Config $config,
         private readonly ExecutableFinder $finder = new ExecutableFinder(),
+        private readonly ?bool $programsCanRun = null,
     ) {
     }
 
@@ -161,17 +168,28 @@ final class ExternalTools
      */
     public function run(array $command, int $seconds): array
     {
-        $process = new Process($command);
-        $process->setTimeout((float) $seconds);
-
-        /* ⚠️ NOTHING IS TYPED AT IT. Without this, a program that decides to ask a question waits
-         * on a terminal that will never answer, and the timeout above becomes the only way out. */
-        $process->setInput('');
-
+        /* ⚠️ THE CONSTRUCTION IS INSIDE THE TRY, AND THAT IS THE FIX RATHER THAN A TIDINESS.
+         * `new Process(...)` throws on its own when the host forbids `proc_open` — before a
+         * single argument has been looked at. Left outside, that exception walked past every
+         * caller: a health screen answered 500 instead of describing the restriction, and a
+         * thumbnail asked for from a request took the whole response with it. Measured on a
+         * panel-managed host, where `proc_open` sits in `disable_functions` by default. */
         try {
+            $process = new Process($command);
+            $process->setTimeout((float) $seconds);
+
+            /* ⚠️ NOTHING IS TYPED AT IT. Without this, a program that decides to ask a question
+             * waits on a terminal that will never answer, and the timeout above becomes the only
+             * way out. */
+            $process->setInput('');
+
             $process->run();
-        } catch (\Throwable) {
-            return ['ok' => false, 'out' => '', 'err' => ''];
+        } catch (\Throwable $reason) {
+            /* ⚠️ THE REASON IS CARRIED, NOT SWALLOWED. "No version" and "programs cannot be run
+             * here at all" call for opposite actions, and an empty string tells them apart for
+             * nobody. It is safe to hand back: {@see looksLikeAVersion} judges on content, and a
+             * sentence about a disabled function carries no version to be mistaken for one. */
+            return ['ok' => false, 'out' => '', 'err' => $reason->getMessage()];
         }
 
         return [
@@ -179,6 +197,24 @@ final class ExternalTools
             'out' => $process->getOutput(),
             'err' => $process->getErrorOutput(),
         ];
+    }
+
+    /**
+     * CAN A PROGRAM BE RUN FROM HERE AT ALL.
+     *
+     * ⚠️ THIS IS A PROPERTY OF THE HOST, NOT OF ANY TOOL, and reporting it per tool would say
+     * "ffmpeg has no version" three times about a machine that simply forbids running anything.
+     * The two readings send an operator to opposite places: one to install a package, the other
+     * to a decision about `disable_functions` — or, better, to the queue, where the restriction
+     * usually does not apply because the command line runs under a different configuration.
+     *
+     * ⚠️ `function_exists` IS THE RIGHT QUESTION HERE. A function named in `disable_functions`
+     * answers `false` to it, exactly as if the build lacked it — which is what matters: either
+     * way it cannot be called.
+     */
+    public function canRunPrograms(): bool
+    {
+        return $this->programsCanRun ?? function_exists('proc_open');
     }
 
     /**

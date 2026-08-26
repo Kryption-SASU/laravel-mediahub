@@ -319,12 +319,22 @@ final class DiagnoseSetup
      */
     private function toolChecks(): array
     {
-        return [
+        $checks = [
             $this->toolCheck(ExternalTools::FFMPEG),
             $this->toolCheck(ExternalTools::FFPROBE),
             $this->pdfToolCheck(),
             $this->imagickCheck(),
         ];
+
+        /* ⚠️ THE HOST'S ANSWER COMES FIRST, BECAUSE IT EXPLAINS THE OTHERS. Where running a
+         * program is forbidden, every box above reports a version of "—" and reads as four
+         * missing tools on a machine that has them all. Said once, at the top, it sends the
+         * operator to the one decision that actually applies. */
+        if (! $this->tools->canRunPrograms()) {
+            array_unshift($checks, $this->finding('tools.programs', self::RISKY, [], []));
+        }
+
+        return $checks;
     }
 
     /**

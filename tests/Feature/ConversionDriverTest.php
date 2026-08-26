@@ -496,4 +496,76 @@ class ConversionDriverTest extends TestCase
             []
         );
     }
+
+    // ── The memory a decode costs ────────────────────────────────────────────
+
+    /**
+     * AN IMAGE TOO LARGE FOR THE MEMORY LEFT IS REFUSED, NOT SURVIVED.
+     *
+     * ⚠️ THE FAILURE THIS GUARDS IS NOT AN EXCEPTION, WHICH IS WHY AN ORDINARY TRY/CATCH NEVER
+     * CAUGHT IT. `imagecreatefromstring` does not return `false` when there is no room: the
+     * process dies where it stands. A command converting a whole library therefore stopped on
+     * its first oversized file and left every later one untouched — observed on a host with a
+     * 128 MB limit over uploads that predate any pixel ceiling.
+     *
+     * ⚠️ AND THE LIMIT IS LOWERED FOR REAL RATHER THAN DESCRIBED. `RuntimeLimits` is final and
+     * reads `ini_get`; a doubled-up version of it would prove the test agrees with itself. The
+     * cost is that the image must be built BEFORE the ceiling drops — building it after would
+     * hit the very exhaustion being guarded against, and kill the run.
+     *
+     * ⚠️ THE SECOND HALF IS WHAT KEEPS THE FIRST HONEST. A guard that refused everything would
+     * satisfy the refusal on its own; converting the same file once the room is back proves the
+     * answer follows the memory and not the file.
+     */
+    public function test_an_image_larger_than_the_memory_left_is_refused_instead_of_exhausting_it(): void
+    {
+        $this->requireGd();
+
+        /* 1200 x 1200 x 4 bytes is about 5.8 MB decoded, out of a file of a few kilobytes —
+         * which is the whole point: nothing about the weight of the file announces it. */
+        $canvas = imagecreatetruecolor(1200, 1200);
+        ob_start();
+        imagepng($canvas);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($canvas);
+
+        Storage::disk('media')->put('wide.png', $bytes);
+
+        $driver = new GdConversionDriver($this->app['filesystem']);
+        $ceiling = ini_get('memory_limit');
+
+        try {
+            /* Four megabytes of room for an image that needs nearly six. */
+            ini_set('memory_limit', (string) (memory_get_usage(true) + 4 * 1024 * 1024));
+
+            $refused = null;
+
+            try {
+                $driver->convert('media', 'wide.png', 'wide-thumb.png', ['width' => 4, 'height' => 4]);
+            } catch (\RuntimeException $e) {
+                $refused = $e->getMessage();
+            }
+
+            $this->assertSame(
+                'conversion_source_needs_more_memory',
+                $refused,
+                'An image that cannot fit in the memory left was not refused before being decoded.'
+            );
+
+            $this->assertFalse(
+                Storage::disk('media')->exists('wide-thumb.png'),
+                'A refused conversion still wrote a file.'
+            );
+        } finally {
+            ini_set('memory_limit', (string) $ceiling);
+        }
+
+        $driver->convert('media', 'wide.png', 'wide-back.png', ['width' => 4, 'height' => 4]);
+
+        $this->assertTrue(
+            Storage::disk('media')->exists('wide-back.png'),
+            'The same file was refused with the room back, so the guard does not follow the memory.'
+        );
+    }
+
 }

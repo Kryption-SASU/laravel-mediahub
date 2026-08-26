@@ -121,6 +121,13 @@ return [
      */
     'tools' => [
 
+        'programs' => [
+            'title' => 'Running a program from a request',
+            'ok' => 'Allowed.',
+            'warning' => 'Forbidden on this installation: proc_open is not available, so no tool above could be asked its version and none can be run while answering a request. Thumbnails built by a queue worker are unaffected — the command line usually runs under a different configuration.',
+            'fix' => 'Nothing needs changing if a queue worker builds the derivatives; check one runs. Allowing proc_open for the web server would also work, and grants every request the right to start programs — a far wider permission than a thumbnail asks for.',
+        ],
+
         'ffmpeg' => [
             'title' => 'ffmpeg — thumbnails of videos',
             'ok' => 'Found at :path (:version).',
