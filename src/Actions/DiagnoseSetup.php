@@ -8,6 +8,8 @@ use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Translation\Translator;
 use Kryption\MediaHub\Support\ArchiveCapacity;
 use Kryption\MediaHub\Support\ArchiveProgress;
+use Kryption\MediaHub\Support\Conversions\ImagickConversionDriver;
+use Kryption\MediaHub\Support\ExternalTools;
 use Kryption\MediaHub\Support\RuntimeLimits;
 use Kryption\MediaHub\Support\ServerRuntime;
 
@@ -51,6 +53,11 @@ final class DiagnoseSetup
         private readonly ArchiveCapacity $capacity,
         private readonly ServerRuntime $runtime,
         private readonly ArchiveProgress $progress,
+        private readonly ExternalTools $tools,
+        /* ⚠️ THE DRIVER ITSELF, so the report and the uploader answer from the same proof. A
+         * report with its own idea of what ImageMagick can read would eventually differ from
+         * what actually happens to a file, and the screen would be the last to know. */
+        private readonly ImagickConversionDriver $imagick,
     ) {
     }
 
@@ -66,6 +73,7 @@ final class DiagnoseSetup
             $this->executionTimeCheck(),
             $this->progressCheck(),
             $this->bufferingCheck(),
+            ...$this->toolChecks(),
             $this->imageMemoryCheck(),
             ...$this->extensionChecks(),
         ];
@@ -294,6 +302,112 @@ final class DiagnoseSetup
         return $needed > $limit
             ? $this->finding('images.memory', self::RISKY, $words, $words)
             : $this->finding('images.memory', self::FINE, $words, null);
+    }
+
+    /**
+     * THE PROGRAMS A THUMBNAIL OF A VIDEO OR A DOCUMENT DEPENDS ON.
+     *
+     * ⚠️ THE RESOLVED PATH IS ON THE SCREEN, NOT MERELY "FOUND" OR "MISSING". A host with three
+     * ffmpegs and a configured path has one question — which one is actually being run — and it
+     * is the only question a yes/no cannot answer.
+     *
+     * ⚠️ AND A CONFIGURED PATH THAT DOES NOT WORK IS ITS OWN FINDING. "There is no ffmpeg on this
+     * machine" and "you named one and it is not an executable" call for opposite actions; folded
+     * together, the second reads as the first and somebody installs a package they already have.
+     *
+     * @return array<int, array{id: string, level: string, title: string, detail: string, recommendation: string|null}>
+     */
+    private function toolChecks(): array
+    {
+        return [
+            $this->toolCheck(ExternalTools::FFMPEG),
+            $this->toolCheck(ExternalTools::FFPROBE),
+            $this->pdfToolCheck(),
+            $this->imagickCheck(),
+        ];
+    }
+
+    /**
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function toolCheck(string $tool): array
+    {
+        $found = $this->tools->resolve($tool);
+        $words = ['tool' => $tool, 'path' => $found['path'] ?? '—', 'version' => '—'];
+
+        if ($found['path'] === null) {
+            /* ⚠️ TWO ABSENCES, TWO SENTENCES. See the note above `toolChecks`. */
+            return $this->finding(
+                'tools.'.$tool,
+                self::RISKY,
+                $words,
+                $words,
+                $found['configured'] ? 'tools.fix_configured' : 'tools.fix_missing',
+            );
+        }
+
+        $words['version'] = $this->tools->version($found['path']) ?? '—';
+
+        return $this->finding('tools.'.$tool, self::FINE, $words, null);
+    }
+
+    /**
+     * ⚠️ THE RENDERER IS NAMED, NOT ONLY LOCATED, because the two take different arguments and a
+     * host reading "found at /usr/bin/pdftoppm" learns which of the two families is in force.
+     *
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function pdfToolCheck(): array
+    {
+        $renderer = $this->tools->pdfRenderer();
+        $words = ['tool' => '—', 'path' => '—', 'version' => '—'];
+
+        if ($renderer === null) {
+            return $this->finding('tools.pdf', self::RISKY, $words, $words, 'tools.pdf.fix');
+        }
+
+        $words['tool'] = $renderer['name'];
+        $words['path'] = $renderer['path'];
+        $words['version'] = $this->tools->version($renderer['path']) ?? '—';
+
+        return $this->finding('tools.pdf', self::FINE, $words, null);
+    }
+
+    /**
+     * WHAT IMAGEMAGICK CAN ACTUALLY DO, AS OPPOSED TO WHAT IT SAYS.
+     *
+     * ⚠️ `queryFormats()` IS AN ADVERTISEMENT, NOT A CAPABILITY, and this package has been
+     * caught by it twice — once on HEIC, once on PDF. It answers "yes" for MP4, MOV and PDF on
+     * machines where every one of them fails: the video formats reach a DELEGATE, which is
+     * ffmpeg, and distributions cut every delegate in `policy.xml`; the PDF coder is cut
+     * outright. So what is reported here is the result of trying, never of asking.
+     *
+     * ⚠️ AND IT IS INFORMATION, NOT A FAULT. A host storing documents needs no image library at
+     * all, and the package says so elsewhere. What this line prevents is an afternoon spent
+     * wondering why a PDF has no thumbnail on a machine whose ImageMagick claims to read them.
+     *
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function imagickCheck(): array
+    {
+        if (! extension_loaded('imagick')) {
+            return $this->finding('images.imagick', self::FINE, ['proven' => '—'], null);
+        }
+
+        $proven = [];
+
+        foreach (['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/tiff', 'application/pdf'] as $type) {
+            if ($this->imagick->supports($type)) {
+                $proven[] = (string) strtok(substr($type, (int) strpos($type, '/') + 1), ';');
+            }
+        }
+
+        return $this->finding(
+            'images.imagick',
+            self::FINE,
+            ['proven' => $proven === [] ? '—' : implode(', ', $proven)],
+            null,
+        );
     }
 
     /**
