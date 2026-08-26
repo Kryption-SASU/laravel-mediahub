@@ -6,7 +6,6 @@ namespace Kryption\MediaHub\Support\Conversions;
 
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Kryption\MediaHub\Contracts\ConversionDriver;
-use Kryption\MediaHub\Support\RuntimeLimits;
 
 /**
  * THE DEFAULT DRIVER — GD, because it is almost always there.
@@ -37,26 +36,9 @@ final class GdConversionDriver implements ConversionDriver
         'image/bmp' => 'BMP Support',
     ];
 
-    /**
-     * WHAT ONE PIXEL COSTS ONCE DECODED.
-     *
-     * ⚠️ FOUR BYTES WHATEVER THE FILE WEIGHED. GD holds a truecolour image at a fixed cost per
-     * pixel, so a fifty-megapixel photograph is two hundred megabytes of memory out of a file of
-     * six. Sizing anything on the weight of the file describes a different quantity.
-     */
-    private const BYTES_A_PIXEL = 4;
-
-    /**
-     * ⚠️ A MARGIN, AND IT IS CALLED ONE RATHER THAN MEASURED. `width * height * 4` is the size of
-     * the image GD ends up holding, not the peak it passes through: the decoder allocates row
-     * buffers of its own on the way. A tenth is a judgement, not a measurement — its purpose is
-     * to keep the refusal on the safe side of a boundary nobody can name exactly.
-     */
-    private const MEMORY_MARGIN = 1.1;
-
     private readonly GdCapabilities $gd;
 
-    private readonly RuntimeLimits $limits;
+    private readonly DecodeBudget $budget;
 
     /**
      * ⚠️ THE CAPABILITY SOURCE IS RESOLVED ONCE, AT CONSTRUCTION. Neither the compiled
@@ -70,10 +52,10 @@ final class GdConversionDriver implements ConversionDriver
     public function __construct(
         private readonly FilesystemFactory $filesystems,
         ?GdCapabilities $capabilities = null,
-        ?RuntimeLimits $limits = null,
+        ?DecodeBudget $budget = null,
     ) {
         $this->gd = $capabilities ?? GdCapabilities::fromRuntime();
-        $this->limits = $limits ?? new RuntimeLimits();
+        $this->budget = $budget ?? new DecodeBudget();
     }
 
     /**
@@ -142,7 +124,25 @@ final class GdConversionDriver implements ConversionDriver
             throw new \RuntimeException('conversion_source_unreadable');
         }
 
-        $this->refuseWhatCannotFitInMemory($bytes);
+        /*
+         * ⚠️ THE HEADER IS READ, NOT THE IMAGE. `getimagesizefromstring` reports the dimensions
+         * without allocating anything, which is the only way to know the cost before paying it.
+         *
+         * ⚠️ AND AN UNREADABLE HEADER IS A REFUSAL, NOT A REASON TO STEP ASIDE. This handed the
+         * decode back on `false` at first, on the grounds that the decode reports the problem
+         * itself with a better sentence. It would — if it survived. Nothing here can be weighed,
+         * so passing the file on is a guess that its cost is small, and the only outcome that
+         * guess has when it is wrong is a dead process. It costs nothing true either: this driver
+         * only receives what {@see supports} accepted, and `getimagesizefromstring` reads the
+         * header of every one of those formats.
+         */
+        $size = @getimagesizefromstring($bytes);
+
+        if ($size === false) {
+            throw new \RuntimeException('conversion_source_undecodable');
+        }
+
+        $this->budget->refuse((int) $size[0], (int) $size[1]);
 
         $source = @imagecreatefromstring($bytes);
 
@@ -186,48 +186,6 @@ final class GdConversionDriver implements ConversionDriver
      * thumbnail wants a regular frame, and a preview wants the whole image. Confusing the two
      * gives either letterboxing or cropped faces.
      */
-    /**
-     * REFUSING AN IMAGE THAT WILL NOT FIT, BEFORE TRYING TO DECODE IT.
-     *
-     * ⚠️ AN EXHAUSTION IS NOT AN EXCEPTION, AND THAT IS THE WHOLE REASON THIS EXISTS.
-     * `imagecreatefromstring` does not return `false` when there is no room left: the process
-     * dies where it stands. Nothing is caught, no row is marked failed, and a command converting
-     * a library stops on its first oversized file with every later one untouched. Measured on a
-     * host with a 128 MB limit over a library of legacy uploads — files that predate the
-     * `uploads.max_image_pixels` ceiling and were never checked against any.
-     *
-     * ⚠️ SO THE QUESTION IS ASKED OF THE HEADER, NOT OF THE DECODER. `getimagesizefromstring`
-     * reads dimensions without allocating the image, which is the only way to know the cost
-     * before paying it.
-     *
-     * ⚠️ AND AGAINST WHAT IS LEFT, NOT AGAINST THE LIMIT. A 256 MB limit with 200 MB already in
-     * use is a 56 MB budget; comparing against the limit passes, then exhausts.
-     */
-    private function refuseWhatCannotFitInMemory(string $bytes): void
-    {
-        $left = $this->limits->memoryLeft();
-
-        /* ⚠️ UNBOUNDED IS NOT "VERY LARGE", IT IS "NO CEILING TO HIT". Refusing on a machine that
-         * has no limit would invent a failure the host never asked for. */
-        if ($left === null) {
-            return;
-        }
-
-        $size = @getimagesizefromstring($bytes);
-
-        /* ⚠️ AN UNREADABLE HEADER IS NOT THIS METHOD'S BUSINESS. The decode below already answers
-         * it, with its own sentence; guessing here would report the wrong cause. */
-        if ($size === false) {
-            return;
-        }
-
-        $needed = (int) ($size[0] * $size[1] * self::BYTES_A_PIXEL * self::MEMORY_MARGIN);
-
-        if ($needed >= $left) {
-            throw new \RuntimeException('conversion_source_needs_more_memory');
-        }
-    }
-
     private function resize(\GdImage $source, int $width, int $height, string $mode): \GdImage
     {
         $sourceWidth = imagesx($source);

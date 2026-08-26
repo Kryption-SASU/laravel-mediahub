@@ -581,4 +581,62 @@ class BrowseApiTest extends TestCase
          */
         $this->getJson('/media/quota')->assertOk()->assertJsonStructure(['data' => ['limit']]);
     }
+
+    // ── A folder that is not there any more ──────────────────────────────────
+
+    /**
+     * A FILE WHOSE FOLDER HAS GONE IS AT THE ROOT, BECAUSE OTHERWISE IT IS NOWHERE.
+     *
+     * ⚠️ IT IS NOT A THEORETICAL STATE. Measured on a production library: 40 of an
+     * organisation's 65 live files named a folder whose record did not exist — not trashed,
+     * absent — leaving 25 on screen and no way to reach the rest. They were alive, they occupied
+     * storage, and no screen could show them, including the one that would have let somebody
+     * move or delete them.
+     *
+     * ⚠️ A FOLDER VANISHES WITHOUT ANYBODY DOING ANYTHING WRONG: a data migration, a deletion
+     * made in SQL, an import that brought files without their tree. Reaching the file again is
+     * the precondition for every repair somebody might want to make.
+     */
+    public function test_a_file_whose_folder_no_longer_exists_appears_at_the_root(): void
+    {
+        $folder = $this->folder('Vanishing');
+        $orphan = $this->media(['name' => 'Orphan', 'folder_id' => $folder->getKey()]);
+        $atRoot = $this->media(['name' => 'Plain']);
+
+        /* The record leaves the table without passing through the trash — exactly what a data
+         * migration leaves behind. */
+        MediaFolder::query()->whereKey($folder->getKey())->forceDelete();
+
+        $listed = array_column($this->getJson('/media')->assertOk()->json('data.media'), 'id');
+
+        sort($listed);
+        $expected = [$orphan->uuid, $atRoot->uuid];
+        sort($expected);
+
+        $this->assertSame($expected, $listed, 'A file whose folder no longer exists is unreachable.');
+    }
+
+    /**
+     * ⚠️ THE COUNTERPART, WITHOUT WHICH THE FIRST PROVES NOTHING. A rule that pulled everything
+     * up to the root would satisfy it just as well; what has to be shown is that a file put away
+     * in a folder that EXISTS stays there, and does not start appearing twice.
+     */
+    public function test_a_file_in_a_folder_that_exists_stays_out_of_the_root(): void
+    {
+        $folder = $this->folder('Kept');
+        $inside = $this->media(['name' => 'Inside', 'folder_id' => $folder->getKey()]);
+        $atRoot = $this->media(['name' => 'Plain']);
+
+        $listed = array_column($this->getJson('/media')->assertOk()->json('data.media'), 'id');
+
+        $this->assertSame([$atRoot->uuid], $listed, 'A filed away file surfaced at the root.');
+
+        $inFolder = array_column(
+            $this->getJson('/media?folder='.$folder->getRouteKey())->assertOk()->json('data.media'),
+            'id'
+        );
+
+        $this->assertSame([$inside->uuid], $inFolder, 'The file is no longer inside its folder.');
+    }
+
 }

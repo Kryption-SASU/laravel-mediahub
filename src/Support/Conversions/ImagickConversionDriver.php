@@ -46,10 +46,19 @@ final class ImagickConversionDriver implements ConversionDriver
      */
     private static array $proven = [];
 
+    private readonly DecodeBudget $budget;
+
+    /**
+     * ⚠️ THE BUDGET IS AN ARGUMENT SO IT CAN BE DESCRIBED. What is left of `memory_limit` on the
+     * machine running a test is not something a test can arrange, and behaviour that depends on
+     * it is otherwise only provable on the host where it already goes wrong.
+     */
     public function __construct(
         private readonly FilesystemFactory $filesystems,
         private readonly Config $config,
+        ?DecodeBudget $budget = null,
     ) {
+        $this->budget = $budget ?? new DecodeBudget();
     }
 
     /**
@@ -161,6 +170,32 @@ final class ImagickConversionDriver implements ConversionDriver
         if ($bytes === null || $bytes === '') {
             throw new \RuntimeException('conversion_source_unreadable');
         }
+
+        /*
+         * ⚠️ THE HEADER FIRST, AND THE SAME QUESTION AS THE OTHER DRIVER. `pingImageBlob` reads
+         * dimensions without expanding anything; asking after the read would be asking once the
+         * damage is done.
+         *
+         * ⚠️ IMAGICK IS NOT EXEMPT FROM `memory_limit`, WHICH IS EASY TO BELIEVE AND WRONG. Its
+         * pixel cache lives outside the PHP allocator, so the natural reading is that PHP's
+         * ceiling does not apply. Measured on the image that killed a production run — 4997 x
+         * 2919 — a `readImageBlob` moved PHP's own accounting by 46 MB and took the peak to 106
+         * of a 128 MB limit. `ImagickGuard` bounds what ImageMagick spends on itself; it says
+         * nothing about the process that hosts it.
+         */
+        try {
+            $probe = new \Imagick();
+            ImagickGuard::bound($probe, ImagickGuard::limits($this->config));
+            $probe->pingImageBlob($bytes);
+
+            $width = $probe->getImageWidth();
+            $height = $probe->getImageHeight();
+            $probe->clear();
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('conversion_source_undecodable', 0, $e);
+        }
+
+        $this->budget->refuse((int) $width, (int) $height);
 
         /**
          * ⚠️ THE SAME FAILURE AS THE OTHER DRIVERS, OF THE SAME TYPE. Imagick raises its own
