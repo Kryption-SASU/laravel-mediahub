@@ -81,7 +81,7 @@ const { available } = useMediaActionList(
     () => props.actions,
     /* ⚠️ THIS BAR IS THE BATCH, so it says so by default. It only ever appears while somebody
      * is assembling one; a caller has to go out of its way to claim otherwise. */
-    () => ({ trashed: props.trashed, picking: props.picking }),
+    () => ({ trashed: props.trashed, picking: props.picking, subject: null }),
 )
 
 /* ⚠️ WATCHED RATHER THAN EMITTED FROM THE HANDLER. The runner clears it in a `finally`, on a

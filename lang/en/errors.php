@@ -73,6 +73,10 @@ return [
     'archive_too_large' => 'This selection is too large to download in one go.',
 
 
+    // -- Building the thumbnails again --------------------------------------
+    'conversion_unsupported_here' => 'No picture can be drawn for this kind of file on this server.',
+
+
     // -- Fetching from a web address ----------------------------------------
     'remote_disabled' => 'Fetching files from a web address is turned off.',
     'remote_url_invalid' => 'That web address cannot be read.',

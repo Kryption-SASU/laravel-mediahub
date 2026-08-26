@@ -122,9 +122,16 @@ describe('the client reads what the server actually sends', () => {
          * ⚠️ `meta` LIVES BESIDE `data`, NOT INSIDE IT. The client rebuilds one object from the
          * two, and nothing but a real payload catches the day it stops doing so — the type
          * would still be satisfied by a page whose `meta` is quietly undefined.
+         *
+         * ⚠️ AND THE FIGURE IS READ FROM THE FIXTURE RATHER THAN WRITTEN HERE. It used to say
+         * `24`, which was the default page size when the fixture was last regenerated; the
+         * default became 48 and the fixture was not regenerated, so the two agreed with each
+         * other and with nothing else for weeks. What this asserts is that the number ARRIVED,
+         * which is the claim in the paragraph above — not what the number happens to be.
          */
-        expect(page.meta.per_page).toBe(24)
-        expect(page.media).toHaveLength(1)
+        expect(page.meta.per_page).toBe(browseRoot.meta.per_page)
+        expect(page.meta.per_page).toBeGreaterThan(0)
+        expect(page.media).toHaveLength(browseRoot.data.media.length)
         expect(page.folders[0]?.name).toBe('Invoices')
     })
 

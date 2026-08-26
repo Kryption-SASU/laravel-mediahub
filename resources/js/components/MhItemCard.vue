@@ -5,7 +5,7 @@ import { useMediaText } from '../i18n/context'
 import { useMediaTheme } from '../theme/context'
 import type { MhComponentOverride } from '../theme/types'
 import MhThumbnail from './MhThumbnail.vue'
-import { CHECK_GLYPH, GLYPH_BOX, MENU_GLYPH } from './glyphs'
+import { CHECK_GLYPH, GLYPH_BOX, MENU_GLYPH, TYPE_GLYPHS } from './glyphs'
 
 /**
  * ONE MEDIA, AS SOMETHING YOU CAN CHOOSE.
@@ -78,6 +78,25 @@ const emit = defineEmits<{ menu: [event: MouseEvent] }>()
 
 const cls = useMediaTheme('itemCard', () => props.ui)
 const t = useMediaText()
+
+/**
+ * THE MARK THAT SAYS WHAT THIS IS, WHEN THE PICTURE NO LONGER DOES.
+ *
+ * ⚠️ SHOWN WHEN THERE IS A THUMBNAIL AND THE FILE IS NOT AN IMAGE. That is the whole rule, and
+ * it is written on those two facts rather than on a list of types: anything that gains a drawn
+ * thumbnail later is covered on the day it does, and an image never is, because there the
+ * thumbnail IS the file.
+ *
+ * ⚠️ AND WITHOUT A THUMBNAIL THERE IS NOTHING TO CLARIFY — the tile already draws the type's own
+ * icon at full size, and a badge of the same glyph on top of it would be the same thing twice.
+ */
+const badge = computed<readonly string[] | null>(() => {
+    if (!props.media.thumbnail_url || props.media.type === 'image') {
+        return null
+    }
+
+    return TYPE_GLYPHS[props.media.type] ?? null
+})
 
 const rootClasses = computed(() =>
     [cls('root'), props.selected ? cls('selected') : ''].join(' ').trim(),
@@ -180,6 +199,38 @@ const rootClasses = computed(() =>
             <!-- ⚠️ DECORATIVE, BECAUSE THE NAME IS RIGHT THERE. Left describing itself, a screen
                  reader announces the same file name twice for every item in the grid. -->
             <MhThumbnail :media="media" :alt="null" size="100%" />
+
+            <!--
+                ⚠️ A VIDEO'S THUMBNAIL IS A PHOTOGRAPH, AND THAT IS THE PROBLEM. Since a frame is
+                drawn from it, nothing on the tile says it is a video any more — and the same
+                goes for the first page of a PDF, which looks like a picture of a sheet of
+                paper. The badge puts the nature back.
+
+                ⚠️ AND IT IS ABSENT ON AN IMAGE, DELIBERATELY. There, the thumbnail IS the file:
+                a badge would label a photograph as a photograph on every tile of the grid, which
+                is noise, and noise is what makes people stop seeing the badges that matter.
+            -->
+            <!--
+                ⚠️ IT IS NOT DECORATIVE, AND MARKING IT SO WOULD BE THE EASY MISTAKE. The badge
+                carries the one thing nothing else on the tile says: a video and a photograph both
+                announce a file name and a picture, and the nature is exactly what the badge was
+                added to restore. Hidden from assistive technology it would restore it for some
+                people and not others.
+            -->
+            <span v-if="badge" :class="cls('typeBadge')" role="img" :aria-label="t('types.' + media.type)">
+                <svg
+                    :class="cls('typeBadgeIcon')"
+                    aria-hidden="true"
+                    :viewBox="GLYPH_BOX"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path v-for="(drawing, step) in badge" :key="step" :d="drawing" />
+                </svg>
+            </span>
         </span>
 
         <span :class="cls('name')" :title="media.name">{{ media.name }}</span>

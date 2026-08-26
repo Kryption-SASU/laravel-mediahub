@@ -164,6 +164,7 @@ const busyLabel = computed(() => {
 const busyMedia = computed(() => working.value?.media ?? [])
 const busyFolders = computed(() => working.value?.folders ?? [])
 const menu = ref({ open: false, x: 0, y: 0 })
+const subject = ref<Media | null>(null)
 
 /**
  * CHOOSING IS A MODE, AND THE SCREEN DOES ONE THING AT A TIME.
@@ -366,6 +367,10 @@ function openMenu(on: { media?: Media; folder?: Folder }, event: MouseEvent): vo
      * "3 selected" over a screen where somebody ticked nothing.
      */
     acting.value = on.media === undefined ? { folders: [on.folder!.id] } : { media: [on.media.id] }
+
+    /* ⚠️ THE OBJECT, NOT ONLY ITS IDENTIFIER. Some entries depend on what a file IS —
+     * whether this server could draw a picture for it — and identifiers cannot say. */
+    subject.value = on.media ?? null
 
     menu.value = { open: true, x: event.clientX, y: event.clientY }
 }
@@ -585,6 +590,7 @@ function onFiltered(types: MediaType[]): void {
             :x="menu.x"
             :y="menu.y"
             :client="client"
+            :subject="subject"
             @busy="working = $event"
             @progress="counting = $event"
             @done="refreshAll"

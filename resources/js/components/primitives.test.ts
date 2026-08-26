@@ -24,6 +24,7 @@ function media(over: Partial<Media> = {}): Media {
         url: 'https://example.test/m1/file',
         download_url: 'https://example.test/m1/download',
         thumbnail_url: null,
+        can_draw: false,
         trashed_at: null,
         created_at: null,
         updated_at: null,

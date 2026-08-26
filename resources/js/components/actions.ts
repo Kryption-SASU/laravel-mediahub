@@ -1,6 +1,6 @@
 import { computed, toValue } from 'vue'
 import type { ComputedRef, MaybeRefOrGetter } from 'vue'
-import type { MediaHubClient, Selection } from '../client'
+import type { Media, MediaHubClient, Selection } from '../client'
 import { MediaHubError } from '../client'
 import { useMediaText } from '../i18n/context'
 import type { MhTranslator } from '../i18n/context'
@@ -14,6 +14,7 @@ import {
     EYE_GLYPH,
     LINK_GLYPH,
     PENCIL_GLYPH,
+    PULSE_GLYPH,
     RESTORE_GLYPH,
     TRASH_GLYPH,
 } from './glyphs'
@@ -59,6 +60,21 @@ export interface MhActionContext {
      * happened to hold a single file, and take it away as soon as a second was added.
      */
     picking: boolean
+
+    /**
+     * The one file being pointed at, when there is exactly one and the screen has it in hand.
+     *
+     * ⚠️ THE SELECTION CANNOT ANSWER THIS EITHER: it holds identifiers. Some entries depend on
+     * what a file IS rather than on how many were ticked — whether the server could draw a
+     * picture for it, which is a fact about the machine as much as about the type. Left to the
+     * type alone, "build the thumbnail again" would be offered on every video, including on the
+     * machines with no ffmpeg, and would earn a refusal for its trouble.
+     *
+     * ⚠️ AND IT IS OPTIONAL, because a screen that does not have the object still works: every
+     * entry that needs it simply does not appear. A host rendering the menu from identifiers
+     * alone loses one action, not the menu.
+     */
+    subject?: Media | null
 }
 
 /** What a confirmation puts to somebody. */
@@ -294,6 +310,25 @@ export function defaultActions(
             /* ⚠️ NO TARGET MEANS "WHERE IT ALREADY IS". Duplicating is not moving, and the copy
              * belongs beside the original where somebody can see it happened. */
             run: (selection) => client.copy(onlyFile(selection)!, null),
+        },
+        {
+            id: 'regenerate',
+            label: t('actions.regenerate'),
+            icon: PULSE_GLYPH,
+            /*
+             * ⚠️ OFFERED ONLY WHERE THE SERVER SAYS IT COULD DRAW SOMETHING, and that is not a
+             * property of the type. The same `video/mp4` is drawable on a machine with ffmpeg and
+             * not on one without: a menu written from the type alone offers the entry on half the
+             * installations that exist, and earns a refusal for its trouble.
+             *
+             * ⚠️ AND NOT ON AN IMAGE. Its thumbnail is already made from the file itself and
+             * nothing about it can have changed — the entry would do work nobody can see.
+             */
+            available: (selection, where) =>
+                onlyFile(selection) !== null
+                && where.subject?.can_draw === true
+                && ordinary(where),
+            run: (selection) => client.regenerate(onlyFile(selection)!),
         },
         {
             id: 'download',

@@ -10,6 +10,7 @@ use Kryption\MediaHub\Support\Remote\CurlTransport;
 use Kryption\MediaHub\Support\Remote\AddressGuard;
 use Kryption\MediaHub\Contracts\RemoteFetcher;
 use Kryption\MediaHub\Backends\HostSchema;
+use Kryption\MediaHub\Console\BuildConversions;
 use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\MediaOwner;
 use Kryption\MediaHub\Contracts\ConversionDriver;
@@ -134,6 +135,10 @@ class MediaHubServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'mediahub');
 
         if ($this->app->runningInConsole()) {
+            /* ⚠️ REGISTERED ONLY IN THE CONSOLE, like the publications below: a web request has
+             * no use for a command, and loading one costs every request that will never run it. */
+            $this->commands([BuildConversions::class]);
+
             $this->publishes([
                 __DIR__.'/../config/mediahub.php' => $this->app->configPath('mediahub.php'),
             ], 'mediahub-config');

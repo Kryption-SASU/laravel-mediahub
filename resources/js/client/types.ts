@@ -48,6 +48,14 @@ export interface Media {
     download_url: string
     /** `null` while a derivative is being built, and for everything that has none. */
     thumbnail_url: string | null
+    /**
+     * Whether a picture could be drawn for this file ON THIS SERVER.
+     *
+     * ⚠️ NOT A PROPERTY OF THE TYPE. The same video is drawable on a machine with ffmpeg
+     * and not on one without, so a screen offering "build it again" from the type alone earns a
+     * refusal on half the installations that exist.
+     */
+    can_draw: boolean
     trashed_at: string | null
     created_at: string | null
     updated_at: string | null

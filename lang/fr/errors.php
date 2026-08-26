@@ -60,6 +60,10 @@ return [
     'archive_too_large' => 'Cette sélection est trop volumineuse pour être téléchargée en une fois.',
 
 
+    // -- Refabrication des miniatures ----------------------------------------
+    'conversion_unsupported_here' => "Aucune image ne peut être produite pour ce type de fichier sur ce serveur.",
+
+
     // -- Récupération depuis une adresse web ---------------------------------
     'remote_disabled' => 'La récupération de fichiers depuis une adresse web est désactivée.',
     'remote_url_invalid' => 'Cette adresse web est illisible.',

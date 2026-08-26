@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Selection } from '../client'
+import type { Media, Selection } from '../client'
 import { MediaHubError } from '../client'
 import { deferred, fakeClient, folder, media } from '../vue/fake.test-utils'
 import type { MhAction } from './actions'
@@ -20,7 +20,13 @@ const oneFolder: Selection = { folders: ['f1'] }
 
 const surfaces = { preview: () => {}, rename: () => {} }
 
-function ids(selection: Selection, where = { trashed: false, picking: false }) {
+function ids(
+    selection: Selection,
+    where: { trashed: boolean; picking: boolean; subject?: Media | null } = {
+        trashed: false,
+        picking: false,
+    },
+) {
     const list = useMediaActionList(
         fakeClient(),
         () => selection,
@@ -808,6 +814,105 @@ describe('waiting, drawn on the thing being waited for', () => {
 
         expect(runner.busy.value).toBeNull()
         expect(runner.error.value).not.toBeNull()
+    })
+})
+
+describe('building the thumbnail again', () => {
+    /**
+     * ⚠️ THE SERVER DECIDES, NOT THE TYPE. The same `video/mp4` is drawable on a machine with
+     * ffmpeg and not on one without, and the browser has no way of working that out. Written from
+     * the type alone, this entry appears on half the installations that exist and earns a refusal
+     * for its trouble — which is what teaches people that the buttons lie.
+     */
+    it('is offered only where the server says it could draw something', () => {
+        const can = media('m1', { can_draw: true })
+        const cannot = media('m1', { can_draw: false })
+
+        expect(ids(oneFile, { trashed: false, picking: false, subject: can })).toContain('regenerate')
+        expect(ids(oneFile, { trashed: false, picking: false, subject: cannot })).not.toContain(
+            'regenerate',
+        )
+    })
+
+    /** ⚠️ AND A SCREEN THAT ONLY HAS IDENTIFIERS LOSES THE ENTRY, not the menu. */
+    it('is not offered when the screen has no file in hand', () => {
+        expect(ids(oneFile)).not.toContain('regenerate')
+    })
+
+    /** ⚠️ NOR IN THE TRASH, where nothing is being looked at and nothing should be rebuilt. */
+    it('is not offered in the trash', () => {
+        const can = media('m1', { can_draw: true })
+
+        expect(ids(oneFile, { trashed: true, picking: false, subject: can })).not.toContain(
+            'regenerate',
+        )
+    })
+
+    it('asks the server for that one file', async () => {
+        const api = fakeClient()
+        const list = useMediaActionList(
+            api,
+            () => oneFile,
+            undefined,
+            () => ({ trashed: false, picking: false, subject: media('m1', { can_draw: true }) }),
+            () => surfaces,
+        )
+
+        await list.available.value.find((action) => action.id === 'regenerate')!.run(oneFile)
+
+        expect(api.calls.filter((call) => call.method === 'regenerate')).toEqual([
+            { method: 'regenerate', args: ['m1'] },
+        ])
+    })
+})
+
+describe('what a tile says it is', () => {
+    /**
+     * ⚠️ A VIDEO'S THUMBNAIL IS A PHOTOGRAPH, AND THAT IS THE PROBLEM. Since a frame is drawn
+     * from it, nothing on the tile says it is a video any more — and the same goes for the first
+     * page of a PDF, which looks like a picture of a sheet of paper.
+     */
+    it('badges a drawn thumbnail with the nature of the file', () => {
+        const wrapper = mount(MhItemCard, {
+            props: {
+                media: media('m1', {
+                    type: 'video',
+                    mime_type: 'video/mp4',
+                    thumbnail_url: 'https://example.test/frame.jpg',
+                }),
+            },
+        })
+
+        expect(wrapper.find('[role="img"][aria-label]').exists()).toBe(true)
+    })
+
+    /**
+     * ⚠️ AND NOT ON AN IMAGE, DELIBERATELY. There the thumbnail IS the file: a badge would label a
+     * photograph as a photograph on every tile of the grid, which is noise — and noise is what
+     * makes people stop seeing the badges that matter.
+     */
+    it('says nothing on a photograph', () => {
+        const wrapper = mount(MhItemCard, {
+            props: {
+                media: media('m1', {
+                    type: 'image',
+                    mime_type: 'image/png',
+                    thumbnail_url: 'https://example.test/small.png',
+                }),
+            },
+        })
+
+        expect(wrapper.find('[role="img"][aria-label]').exists()).toBe(false)
+    })
+
+    /** ⚠️ NOR WHERE THERE IS NO THUMBNAIL: the tile already draws the type's own icon full size,
+     * and the same glyph on top of it would be the same thing twice. */
+    it('says nothing where there is no picture to clarify', () => {
+        const wrapper = mount(MhItemCard, {
+            props: { media: media('m1', { type: 'video', thumbnail_url: null }) },
+        })
+
+        expect(wrapper.find('[role="img"][aria-label]').exists()).toBe(false)
     })
 })
 
