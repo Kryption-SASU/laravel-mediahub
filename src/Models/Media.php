@@ -14,6 +14,7 @@ use Kryption\MediaHub\Backends\HostSchema;
 use Kryption\MediaHub\Contracts\MediaTypeResolver;
 use Kryption\MediaHub\Enums\MediaType;
 use Kryption\MediaHub\Models\Concerns\MapsHostColumns;
+use Kryption\MediaHub\Models\Concerns\ConcealsHiddenPaths;
 use Kryption\MediaHub\Models\Concerns\ScopedToMediaScope;
 
 /**
@@ -31,6 +32,7 @@ use Kryption\MediaHub\Models\Concerns\ScopedToMediaScope;
 class Media extends Model
 {
     use MapsHostColumns;
+    use ConcealsHiddenPaths;
     use ScopedToMediaScope;
     use SoftDeletes;
 

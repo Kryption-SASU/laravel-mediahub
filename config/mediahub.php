@@ -219,6 +219,51 @@ return [
         'external_providers' => false,
     ],
 
+    'library' => [
+
+        /*
+         * PATHS THE LIBRARY NEVER SHOWS.
+         *
+         * ⚠️ AN APPLICATION STORES MORE THAN ITS LIBRARY. Avatars, the attachments of a private
+         * conversation, an image posted in a comment: all of them are media rows, none of them is
+         * something to offer in a file browser. A host that keeps them in the same table has
+         * nowhere to say so — and the default of showing everything is the wrong one, because it
+         * is silent. Measured on one estate before this key existed: 87 attachments from private
+         * conversations, 64 avatars and 13 comment images, listed to every back-office user of
+         * the organisation, and downloadable by identifier.
+         *
+         * ⚠️ HIDDEN MEANS HIDDEN, NOT MERELY UNLISTED. The rule is a scope on the model, so a
+         * concealed row is absent from the listing, from a search, from a folder's contents AND
+         * from a lookup by identifier — a file one can still fetch by guessing its id is not
+         * hidden, it is unadvertised.
+         *
+         * ⚠️ PATTERNS, NOT PREFIXES, and the difference decides real cases. On that estate, a
+         * personal chat wallpaper and a group's shared one sit in the same folder and are told
+         * apart by their name alone. A prefix could only take both or neither.
+         *
+         * The examples sit below this block rather than inside it: a pattern ending a path
+         * segment with a star spells the very sequence that closes a comment, which is a thing
+         * one discovers by breaking the file.
+         *
+         * `*` stands for any run of characters. ⚠️ AND `_` IS ONE CHARACTER OF ANYTHING in the
+         * comparison underneath, so a pattern written with an underscore may cover a little more
+         * than it names. It hides more, never less — which is the direction a rule of this kind
+         * should fail in.
+         *
+         * ⚠️ EMPTY BY DEFAULT, and deliberately: a package cannot know which of a host's paths
+         * are private, and guessing would either hide a library or leak a conversation. The list
+         * belongs to whoever knows what the paths mean.
+         *
+         * ⚠️ `withoutMediaScope()` LIFTS THIS TOO. It is the maintenance door, and it opens
+         * everything — a command walking every file will see concealed ones, which is what makes
+         * a rebuild or an audit possible at all.
+         */
+        // '*/users/*'                          every avatar
+        // '*/chat/attachments/*'                everything sent inside a conversation
+        // '*/chat/wallpapers/chat-wallpaper-*'  the personal ones, keeping the group's
+        'hidden' => [],
+    ],
+
     'uploads' => [
         /**
          * In kilobytes.
