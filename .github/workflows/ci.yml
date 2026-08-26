@@ -125,9 +125,6 @@ jobs:
       # asserts nothing. A machine without them is a supported machine, which is exactly why the
       # benches skip rather than fail; it is also why the pipeline has to be one that has them,
       # or the whole feature is untested on every pull request.
-      - name: The programs a thumbnail needs
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
-
       - name: Install dependencies
         run: |
           composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --dev --no-interaction --no-update
@@ -159,9 +156,6 @@ jobs:
           php-version: '8.4'
           extensions: ${{ matrix.extensions }}
           coverage: none
-
-      - name: The programs a thumbnail needs
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
 
       - name: Install dependencies
         run: composer update --prefer-dist --no-interaction --no-progress
@@ -195,6 +189,18 @@ jobs:
           extensions: fileinfo, json, mbstring, gd
           coverage: pcov
 
+      # ⚠️ HERE, AND IN NO OTHER JOB. The thumbnail benches skip where the tools are absent — the
+      # honest behaviour on a machine that has none — so a pipeline without them anywhere would
+      # be green while proving nothing about the feature. One job that has them is enough to
+      # prove it; nine are enough to slow every pull request down.
+      #
+      # ⚠️ AND IT IS MEASURED RATHER THAN ESTIMATED. `ffmpeg` pulls about a hundred packages on
+      # Ubuntu: put in all nine jobs it took each of them from roughly thirty seconds to between
+      # one and two minutes, for the same assertion made nine times.
+      #
+      # ⚠️ THIS JOB, BECAUSE IT RUNS THE WHOLE SUITE ANYWAY and is required to merge. Put in the
+      # matrix instead, the feature would be proven on one PHP version and unproven if that row
+      # were ever removed.
       - name: The programs a thumbnail needs
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg poppler-utils
 
