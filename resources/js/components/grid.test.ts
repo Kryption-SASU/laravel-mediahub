@@ -22,6 +22,7 @@ function media(id: string, name = id): Media {
         url: `https://example.test/${id}`,
         download_url: `https://example.test/${id}/download`,
         thumbnail_url: null,
+        preview_url: null,
         can_draw: false,
         trashed_at: null,
         created_at: null,

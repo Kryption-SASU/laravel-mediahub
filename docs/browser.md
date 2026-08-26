@@ -312,6 +312,38 @@ half the installations that exist and earns a refusal for its trouble.
 It needs the file itself, not its identifier, so it arrives through `MhActionContext.subject`. ⚠️
 A screen that renders the menu from identifiers alone loses that one entry, not the menu.
 
+## Two sizes, and which screen asks for which
+
+A grid wants a small picture; a panel showing one file wants a large one. ⚠️ **The difference is
+visible**: a detail panel used to blow the 256-pixel thumbnail up to fill itself, which reads as a
+bad picture rather than as the wrong size being asked for.
+
+```php
+'definitions' => [
+    'thumb'   => ['width' => 256,  'height' => 256,  'fit' => 'cover'],
+    'preview' => ['width' => 1024, 'height' => 1024, 'fit' => 'contain',
+                  'types' => ['video', 'document']],
+],
+'thumbnail' => 'thumb',    // which definition the grid asks for
+'preview'   => 'preview',  // which one a panel asks for
+```
+
+⚠️ **`types` is what keeps the large one from costing everybody.** Without it every photograph in
+the library grows a second large derivative that no screen asks for — double the conversion work
+and double the storage, to serve nothing. An image already has an original worth showing; a video
+and a PDF do not, which is the whole reason the large one exists.
+
+⚠️ **An absent or empty `types` means "all of them"** — every definition written before this
+existed says exactly that, and must go on meaning it.
+
+⚠️ **And the payload names each role rather than answering "the first ready derivative".** With
+one definition those were the same thing; with two it is a draw, and a grid could be handed the
+full-size preview on some rows and not others — every tile quietly weighing four times what it
+should, on a screen showing twenty-four of them.
+
+`MhThumbnail` takes `prefer="preview"` where the large one is wanted, and falls back on its own:
+preview, then thumbnail, then the original for an image.
+
 ## A tile says what it is
 
 ⚠️ **A video's thumbnail is a photograph, and that is the problem.** Since a frame is drawn from

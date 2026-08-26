@@ -95,6 +95,17 @@ final class GenerateConversions
         $produced = [];
 
         foreach ($definitions as $name => $definition) {
+            /*
+             * ⚠️ A DEFINITION MAY NAME THE TYPES IT IS FOR, and that is what keeps a large
+             * derivative from costing everybody. The full-size preview exists for files with no
+             * viewable original — a video, a document — and producing one for every photograph in
+             * a library would double the conversion work and the storage to serve a screen that
+             * would never ask for it.
+             */
+            if (! $this->wanted((array) $definition, $media)) {
+                continue;
+            }
+
             $made = $this->produce($driver, $media, (string) $name, (array) $definition, $source);
 
             /* ⚠️ A DEFINITION THAT HAD NOTHING TO DRAW ADDS NOTHING to what was produced. */
@@ -104,6 +115,26 @@ final class GenerateConversions
         }
 
         return $produced;
+    }
+
+    /**
+     * WHETHER THIS DEFINITION IS MEANT FOR THIS FILE.
+     *
+     * ⚠️ AN ABSENT `types` MEANS "ALL OF THEM", which is what every definition written before
+     * this existed says — and they must go on meaning it. A key nobody set cannot be allowed to
+     * start excluding things.
+     *
+     * ⚠️ AND AN EMPTY LIST MEANS ALL OF THEM TOO. `'types' => []` is what a host writes when a
+     * loop built the list and found nothing; reading it as "for no type at all" would silently
+     * stop producing anything, which is the failure nobody thinks to look for.
+     *
+     * @param  array<string, mixed>  $definition
+     */
+    private function wanted(array $definition, Media $media): bool
+    {
+        $types = array_filter(array_map('strval', (array) ($definition['types'] ?? [])));
+
+        return $types === [] || in_array($media->mediaType()->value, $types, true);
     }
 
     /**

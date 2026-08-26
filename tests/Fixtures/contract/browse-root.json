@@ -34,6 +34,7 @@
                 "url": "http://localhost/media/00000000-0000-4000-8000-000000000000/file?expires=&signature=",
                 "download_url": "http://localhost/media/00000000-0000-4000-8000-000000000000/download?expires=&signature=",
                 "thumbnail_url": null,
+                "preview_url": null,
                 "can_draw": true,
                 "trashed_at": null,
                 "created_at": "2026-01-01T00:00:00+00:00",

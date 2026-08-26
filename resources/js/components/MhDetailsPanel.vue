@@ -279,7 +279,7 @@ async function save(): Promise<void> {
              picked the right file, and a 3rem chip beside four lines of metadata does not settle
              that for two screenshots taken a minute apart. -->
         <span :class="cls('preview')">
-            <MhThumbnail :media="media" :alt="null" size="100%" />
+            <MhThumbnail :media="media" :alt="null" size="100%" prefer="preview" />
         </span>
 
         <!-- ⚠️ THE ADDRESS IS A FIELD, NOT A LINE OF TEXT, and that is the whole point: a

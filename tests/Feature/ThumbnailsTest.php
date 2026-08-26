@@ -12,6 +12,7 @@ use Kryption\MediaHub\Enums\ConversionState;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaConversion;
 use Kryption\MediaHub\Support\ExternalTools;
+use Kryption\MediaHub\Tests\Fixtures\SampleImages;
 use Kryption\MediaHub\Tests\TestCase;
 use Kryption\MediaHub\ValueObjects\UploadedPayload;
 
@@ -42,6 +43,17 @@ class ThumbnailsTest extends TestCase
         config()->set('mediahub.storage.disk', 'media');
     }
 
+    /**
+     * ⚠️ THE ROUTES ARE REGISTERED AT BOOT, so this cannot be done in `setUp`. Set there, the
+     * default `['web', 'auth']` is already in force and every request answers 401 — which reads
+     * as an authorisation bug in the code being tested rather than as a bench that spoke too
+     * late.
+     */
+    protected function defineEnvironment($app): void
+    {
+        $app['config']->set('mediahub.routes.middleware', ['web']);
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->temporary as $path) {
@@ -68,9 +80,17 @@ class ThumbnailsTest extends TestCase
         return $this->app->make(UploadMedia::class)(UploadedPayload::fromLocalFile($path, $name));
     }
 
-    private function thumbnailOf(Media $media): ?MediaConversion
+    /**
+     * ⚠️ NAMED, NOT "THE FIRST ONE". There are two definitions now, and a bench reading whichever
+     * row the database returned first would assert against the small one on some runs and the
+     * large one on others — passing either way, and proving nothing about either.
+     */
+    private function thumbnailOf(Media $media, string $name = 'thumb'): ?MediaConversion
     {
-        return MediaConversion::query()->where('media_id', $media->getKey())->first();
+        return MediaConversion::query()
+            ->where('media_id', $media->getKey())
+            ->where('name', $name)
+            ->first();
     }
 
     private function needs(string $tool): void
@@ -172,6 +192,83 @@ class ThumbnailsTest extends TestCase
         $this->assertNotNull($thumb);
         $this->assertSame(ConversionState::Failed, $thumb->state);
         $this->assertStringContainsString('too_large', (string) $thumb->error);
+    }
+
+    // ── The large one, for a screen showing one file ─────────────────────────
+
+    /**
+     * ⚠️ A VIDEO AND A DOCUMENT HAVE NO VIEWABLE ORIGINAL, so a panel showing one on its own used
+     * to blow the 256-pixel thumbnail up to fill itself — which reads as a bad picture rather than
+     * as the wrong size being asked for. The large derivative exists for exactly those.
+     */
+    public function test_a_video_gets_a_large_one_as_well(): void
+    {
+        $this->needs(ExternalTools::FFMPEG);
+
+        $media = $this->upload($this->fixture('clip.mp4'), 'clip.mp4');
+        $preview = $this->thumbnailOf($media, 'preview');
+
+        $this->assertNotNull($preview, 'No large derivative was built for a video.');
+        $this->assertSame(ConversionState::Ready, $preview->state);
+
+        /* ⚠️ AND IT IS BIGGER, which is the whole reason it exists. */
+        $this->assertGreaterThan(
+            (int) $this->thumbnailOf($media)->width,
+            (int) $preview->width,
+        );
+    }
+
+    /**
+     * ⚠️ AND AN IMAGE GETS ONLY THE SMALL ONE. It already has an original worth showing; a second
+     * large derivative for every photograph in a library is double the conversion work and double
+     * the storage, to serve a screen that would not ask for it.
+     */
+    public function test_a_photograph_gets_only_the_small_one(): void
+    {
+        $media = $this->upload(SampleImages::bytes('image/png'), 'photo.png');
+
+        $this->assertNotNull($this->thumbnailOf($media));
+        $this->assertNull($this->thumbnailOf($media, 'preview'));
+    }
+
+    /**
+     * ⚠️ THE PAYLOAD CARRIES ONE ADDRESS PER ROLE, AND IT USED TO CARRY "THE FIRST READY ONE".
+     * With a single definition that was the same thing; with two it is a draw — a grid asking for
+     * a thumbnail could be handed the full-size preview, on some rows and not others, and every
+     * tile would quietly weigh four times what it should.
+     */
+    public function test_each_address_is_the_derivative_it_says_it_is(): void
+    {
+        $this->needs(ExternalTools::FFMPEG);
+
+        $media = $this->upload($this->fixture('clip.mp4'), 'clip.mp4');
+
+        $body = $this->getJson('/media/'.$media->uuid)->assertOk()->json('data');
+
+        $this->assertNotNull($body['thumbnail_url']);
+        $this->assertNotNull($body['preview_url']);
+        $this->assertNotSame($body['thumbnail_url'], $body['preview_url']);
+
+        /* ⚠️ AND EACH POINTS AT ITS OWN FILE, which is what tells the two apart on the wire. */
+        $this->assertStringContainsString(
+            (string) $this->thumbnailOf($media)->path,
+            (string) $body['thumbnail_url'],
+        );
+        $this->assertStringContainsString(
+            (string) $this->thumbnailOf($media, 'preview')->path,
+            (string) $body['preview_url'],
+        );
+    }
+
+    /** ⚠️ AND A PHOTOGRAPH ANSWERS NULL for the large one rather than repeating the small one. */
+    public function test_a_photograph_has_no_large_address(): void
+    {
+        $media = $this->upload(SampleImages::bytes('image/png'), 'photo.png');
+
+        $body = $this->getJson('/media/'.$media->uuid)->assertOk()->json('data');
+
+        $this->assertNotNull($body['thumbnail_url']);
+        $this->assertNull($body['preview_url']);
     }
 
     // ── A document ───────────────────────────────────────────────────────────
