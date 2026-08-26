@@ -19,6 +19,31 @@ declare(strict_types=1);
 
 return [
 
+    'runtime' => [
+
+        'sapi' => [
+            'title' => 'Comment PHP tourne ici (:sapi)',
+            'ok' => 'Les requêtes passent par l\'interface :sapi. Ce qui borne un téléchargement long ici, c\'est :timeouts — rien de tout cela ne se lit depuis PHP, et c\'est la raison pour laquelle le budget d\'archive plus bas se déclare au lieu de se détecter.',
+            'warning' => 'Ce bilan a été produit depuis la ligne de commande, qui n\'est pas l\'interface servant votre site. Toutes les limites ci-dessous sont celles de la console : un php.ini distinct pour elle est l\'usage courant, donc ces chiffres peuvent n\'avoir aucun rapport avec ceux que rencontrent vos visiteurs.',
+
+            'fix' => 'Ouvrez le bilan depuis un navigateur, pour qu\'il lise l\'environnement qui répond réellement aux requêtes.',
+        ],
+
+        /*
+         * ⚠️ UNE PHRASE PAR FAMILLE, ET TOUT L'INTÉRÊT EST LE FICHIER VERS LEQUEL ELLE ENVOIE.
+         * `request_terminate_timeout` est exact sous PHP-FPM et n'existe pas sous mod_php : un
+         * hébergement Apache à qui l'on dit d'éditer `php-fpm.conf` cherche un fichier qu'il n'a
+         * pas, et en conclut que le bilan parle d'autre chose.
+         */
+        'timeouts' => [
+            'fpm' => 'le request_terminate_timeout de votre pool PHP-FPM et le délai de proxy de votre serveur frontal, le plus petit des deux',
+            'module' => 'votre serveur frontal ou votre CDN, s\'il y en a un — mod_php ne borne pas la durée d\'une requête, et le Timeout d\'Apache ne se déclenche que si la connexion se bloque, pas si elle est simplement lente',
+            'cgi' => 'le délai de ce qui parle FastCGI à PHP — fastcgi_read_timeout sous nginx, FcgidIOTimeout sous mod_fcgid, soixante secondes par défaut dans les deux cas',
+            'cli' => 'rien du tout en ligne de commande, et c\'est précisément l\'environnement dont les chiffres en disent le moins sur votre site',
+            'unknown' => 'ce qui supervise cette interface — ce paquet ne la reconnaît pas, et préfère le dire plutôt que vous envoyer vers un fichier de configuration que vous n\'avez pas',
+        ],
+    ],
+
     'uploads' => [
 
         'upload_max_filesize' => [
@@ -43,8 +68,21 @@ return [
             'ok' => 'Les archives sont plafonnées à :configured, ce que cette machine devrait livrer.',
             'warning' => 'La configuration autorise :configured, alors que cette machine ne devrait finir que :deliverable. Au-delà, c\'est refusé avant de commencer — et c\'est voulu : une archive coupée en cours de route a déjà envoyé son 200, donc elle se télécharge et s\'ouvre avec des fichiers manquants.',
 
-            'declare' => 'Réglez mediahub.archives.time_budget sur le nombre de secondes qu\'un téléchargement peut réellement durer ici — votre request_terminate_timeout PHP-FPM et le délai de votre proxy, le plus petit des deux. Ni l\'un ni l\'autre ne se lisent depuis PHP : tant que rien n\'est déclaré, le paquet suppose soixante secondes.',
-            'lower' => 'Abaissez mediahub.archives.max_bytes à :deliverable, ou relevez mediahub.archives.time_budget et les délais qui sont derrière.',
+            'declare' => 'Réglez mediahub.archives.time_budget sur le nombre de secondes qu\'un téléchargement peut réellement durer ici. Ce qui le borne sur cette machine, c\'est :timeouts. Rien de tout cela ne se lit depuis PHP : tant que rien n\'est déclaré, le paquet suppose soixante secondes.',
+            'lower' => 'Abaissez mediahub.archives.max_bytes à :deliverable, ou relevez mediahub.archives.time_budget et les délais qui sont derrière — ici, :timeouts.',
+        ],
+
+        'execution_time' => [
+            'title' => 'Temps qu\'une archive peut passer à compresser (max_execution_time)',
+            'ok' => 'PHP lui-même ne coupe pas une archive ici : :because.',
+            'warning' => 'PHP arrête un script au bout de :limit secondes, et set_time_limit est désactivée sur cette machine : le paquet ne peut donc pas relever la limite pour la réponse qu\'il diffuse. L\'attente du stockage ne compte pas dans cette limite, mais la compression si — une grosse archive de fichiers pas déjà compressés peut l\'atteindre, et elle est alors tuée après le début du téléchargement, laissant un ZIP qui s\'ouvre avec des fichiers manquants.',
+
+            'because' => [
+                'absent' => 'PHP n\'impose aucune limite de temps d\'exécution',
+                'lifted' => 'le paquet lève la limite de :limit secondes pour la réponse qu\'il diffuse',
+            ],
+
+            'fix' => 'Relevez max_execution_time dans php.ini, ou retirez set_time_limit de disable_functions pour que le paquet puisse la lever là où il en a besoin.',
         ],
 
         'buffering' => [

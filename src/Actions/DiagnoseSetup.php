@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Translation\Translator;
 use Kryption\MediaHub\Support\ArchiveCapacity;
 use Kryption\MediaHub\Support\RuntimeLimits;
+use Kryption\MediaHub\Support\ServerRuntime;
 
 /**
  * WHAT THIS CONFIGURATION PROMISES, AND WHAT THIS MACHINE WILL ACTUALLY DO.
@@ -22,10 +23,15 @@ use Kryption\MediaHub\Support\RuntimeLimits;
  * somebody to a search engine; "set post_max_size to at least 200M, or lower
  * mediahub.uploads.max_size to 8000" is a decision they can take in one minute.
  *
- * ⚠️ AND IT ADMITS WHAT IT CANNOT SEE. PHP-FPM's `request_terminate_timeout` and the front-end
- * server's proxy timeout are what really cut a long download, and neither is readable from
- * inside the process. The report says so rather than implying the machine has been fully
- * examined — a diagnosis that overstates its reach is one people trust in the wrong places.
+ * ⚠️ AND IT ADMITS WHAT IT CANNOT SEE. What really cuts a long download is set outside the
+ * process — by the pool manager, or the front-end server, or a CDN — and none of it is readable
+ * from in here. The report says so rather than implying the machine has been fully examined: a
+ * diagnosis that overstates its reach is one people trust in the wrong places.
+ *
+ * ⚠️ WHICH ALSO MEANS THE ADVICE IS NOT THE SAME ON EVERY MACHINE. `request_terminate_timeout`
+ * is exact under PHP-FPM and does not exist under mod_php, where nothing bounds a request's
+ * duration at all. Every sentence about a timeout therefore comes from the runtime family this
+ * process is actually in — see {@see ServerRuntime}.
  */
 final class DiagnoseSetup
 {
@@ -42,6 +48,7 @@ final class DiagnoseSetup
         private readonly Translator $translator,
         private readonly RuntimeLimits $limits,
         private readonly ArchiveCapacity $capacity,
+        private readonly ServerRuntime $runtime,
     ) {
     }
 
@@ -51,8 +58,10 @@ final class DiagnoseSetup
     public function __invoke(): array
     {
         $checks = [
+            $this->runtimeCheck(),
             ...$this->uploadChecks(),
             $this->archiveCapacityCheck(),
+            $this->executionTimeCheck(),
             $this->bufferingCheck(),
             $this->imageMemoryCheck(),
             ...$this->extensionChecks(),
@@ -62,6 +71,26 @@ final class DiagnoseSetup
             'ok' => ! in_array(self::FAILING, array_column($checks, 'level'), true),
             'checks' => $checks,
         ];
+    }
+
+    /**
+     * WHICH PHP IS ANSWERING — because every other sentence in this report depends on it.
+     *
+     * ⚠️ THE CONSOLE IS THE ONE ANSWER THAT MAKES THE REPORT MISLEADING. Run from a terminal,
+     * every number below is the command line's: its memory limit, its execution time, its
+     * extensions. A separate `php.ini` for the console is the normal arrangement rather than an
+     * exotic one, so the report is not merely incomplete — it is confidently wrong about a
+     * machine nobody asked about. Saying so is the only honest thing to do with it.
+     *
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function runtimeCheck(): array
+    {
+        $words = ['sapi' => $this->runtime->sapi(), 'timeouts' => $this->timeoutPhrase()];
+
+        return $this->runtime->servesTheWeb()
+            ? $this->finding('runtime.sapi', self::FINE, $words, null)
+            : $this->finding('runtime.sapi', self::RISKY, $words, $words);
     }
 
     /**
@@ -121,6 +150,10 @@ final class DiagnoseSetup
         $words = [
             'configured' => $configured > 0 ? $this->human($configured) : '∞',
             'deliverable' => $this->human($deliverable),
+
+            /* ⚠️ THE ADVICE NAMES THIS MACHINE'S TIMEOUTS, not one family's. Sending an Apache
+             * host to `php-fpm.conf` costs them the afternoon this report was meant to save. */
+            'timeouts' => $this->timeoutPhrase(),
         ];
 
         if ($configured > 0 && $configured <= $deliverable) {
@@ -134,9 +167,60 @@ final class DiagnoseSetup
             'archives.capacity',
             self::RISKY,
             $words,
-            $declared ? $words : $words,
+            $words,
             $declared ? 'archives.capacity.lower' : 'archives.capacity.declare',
         );
+    }
+
+    /**
+     * THE ONE CEILING A CLASSIC PHP CAN ACTUALLY HIT WHILE STREAMING.
+     *
+     * ⚠️ `max_execution_time` IS NOT A WALL CLOCK, AND THAT IS MEASURED RATHER THAN REMEMBERED.
+     * A script blocked on input and output runs past its limit indefinitely — a probe held on a
+     * pipe survived fifteen seconds under a limit of two, while the same limit killed a busy
+     * loop at 2.1. So waiting for a remote object store, which is nearly all of what streaming
+     * an archive consists of, does not count against it.
+     *
+     * ⚠️ BUT COMPRESSING DOES, and that is why this is here. Deflating a few gigabytes of files
+     * that are not already compressed is processor work, it accumulates, and when it reaches the
+     * limit the script is killed after the 200 and the first bytes have gone — the truncated
+     * archive this package exists to avoid handing anyone.
+     *
+     * ⚠️ NORMALLY THE PACKAGE JUST LIFTS IT. `set_time_limit(0)` before the first byte settles
+     * the whole question — except where `disable_functions` has taken the function away, which
+     * is ordinary on shared hosting, and is exactly the kind of host that runs classic PHP
+     * rather than a pool it configured itself.
+     *
+     * @return array{id: string, level: string, title: string, detail: string, recommendation: string|null}
+     */
+    private function executionTimeCheck(): array
+    {
+        $limit = $this->limits->seconds('max_execution_time');
+        $liftable = $this->runtime->canLiftTheTimeLimit();
+
+        $words = [
+            'limit' => $limit === null ? '∞' : (string) $limit,
+            'because' => (string) $this->translator->get(
+                'mediahub::diagnostics.archives.execution_time.because.'.($limit === null ? 'absent' : 'lifted'),
+                ['limit' => (string) $limit],
+            ),
+        ];
+
+        return $limit === null || $liftable
+            ? $this->finding('archives.execution_time', self::FINE, $words, null)
+            : $this->finding('archives.execution_time', self::RISKY, $words, $words);
+    }
+
+    /**
+     * WHERE THIS MACHINE'S REAL DOWNLOAD CEILING IS WRITTEN, in words somebody can act on.
+     *
+     * ⚠️ ONE PHRASE PER RUNTIME FAMILY, HELD IN THE CATALOGUE. The recommendations that use it
+     * are the same sentence everywhere; only the place to go and look changes, and that is
+     * precisely the part a report must not get wrong.
+     */
+    private function timeoutPhrase(): string
+    {
+        return (string) $this->translator->get('mediahub::diagnostics.runtime.timeouts.'.$this->runtime->family());
     }
 
     /**

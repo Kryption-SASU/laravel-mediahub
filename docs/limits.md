@@ -60,7 +60,9 @@ to make.
 
 | | |
 |---|---|
+| which PHP is answering | `fpm-fcgi`, `apache2handler`, `cgi-fcgi`… — every sentence about a timeout below is chosen from it |
 | `upload_max_filesize`, `post_max_size` | against `uploads.max_size` — and the second bounds the whole request, file plus fields, so it must be larger than the first rather than equal |
+| `max_execution_time` | against whether `set_time_limit` is still callable — see [below](#the-one-limit-classic-php-actually-hits) |
 | the archive ceiling | against what the time budget allows, saying which of the two fixes applies |
 | `zlib.output_compression` | buffering turns streaming into a word rather than a behaviour |
 | `memory_limit` | against `uploads.max_image_pixels` — it is the pixels that exhaust memory, not the file size: fifty megapixels is two hundred megabytes to decode, from a file of six |
@@ -89,22 +91,48 @@ say nothing about what the machine can deliver.
 ```
 
 ⚠️ **What cuts a long download cannot be read from inside PHP.** `max_execution_time` is largely
-beside the point — on Unix it does not count time spent waiting on input and output, which is
-nearly all of streaming a remote object store. The real ceilings are PHP-FPM's
-`request_terminate_timeout` and the front-end server's proxy timeout, and no code in the process
-can see either.
+beside the point as a wall clock — it does not count time spent waiting on input and output, which
+is nearly all of streaming a remote object store. Measured here: a script blocked on a pipe
+outlived a two-second limit by fifteen, while the same limit killed a busy loop at 2.1 seconds.
+
+⚠️ **And the ceiling that does apply is not the same setting on every machine.** This is the part
+that has to be right, because advice naming a file somebody does not have reads as a report about
+a different product:
+
+| PHP runs as | `PHP_SAPI` | What really ends a long request |
+|---|---|---|
+| PHP-FPM | `fpm-fcgi` | the pool's `request_terminate_timeout`, and the proxy timeout in front of it |
+| an Apache module | `apache2handler` | **nothing bounds the duration** — mod_php has no such setting, and Apache's `Timeout` fires on a stalled connection rather than a slow one. What is left is your CDN or reverse proxy, if any |
+| FastCGI / CGI | `cgi-fcgi` | nginx's `fastcgi_read_timeout`, or `FcgidIOTimeout` under mod_fcgid — sixty seconds by default either way |
+| the command line | `cli` | nothing, which is why a report produced from a console says so about itself |
+| anything else | — | LiteSpeed, FrankenPHP, RoadRunner: the package says it does not recognise the runtime rather than guessing at a file name |
 
 So the budget is **declared, not detected**. Left at zero the package assumes sixty seconds, which
 with the throughput above allows roughly 600 MB. That assumption is deliberately modest: the cost
 of being wrong is asymmetric — a refused archive is a sentence somebody reads, a truncated one is
 a corrupt file found weeks later.
 
+### The one limit classic PHP actually hits
+
+`max_execution_time` does not count the waiting, but it **does count the compressing**. Deflating
+a few gigabytes of files that are not already compressed is processor work, it accumulates, and
+reaching the limit kills the script after the 200 and the first bytes have gone.
+
+Normally that never happens: the stream calls `set_time_limit(0)` before writing a byte. The case
+worth reporting is a host where `disable_functions` has taken that function away — ordinary on
+shared hosting, and exactly the kind of host running mod_php rather than a pool it configured
+itself. The health report then names the seconds and the two ways out.
+
+⚠️ **The report and the stream read that answer from the same place.** A report promising the
+limit will be lifted, beside a stream that silently could not, is worse than no report: it is the
+sentence somebody trusts while looking for the fault somewhere else.
+
 The refusal carries its own reason:
 
 | `reason` | Means |
 |---|---|
 | `archive_too_large` | the selection exceeds `max_bytes` — a policy you chose |
-| `archive_beyond_capacity` | the policy exceeds the machine — the fix is in `php-fpm.conf`, not in the selection |
+| `archive_beyond_capacity` | the policy exceeds the machine — the fix is in the server's configuration, not in the selection, and the health report names which file that is here |
 
 ⚠️ **`max_bytes` of zero is not infinity here.** It means the package imposes no ceiling of its
 own; read as "the machine can send anything", it is what lets a two-hour archive start.

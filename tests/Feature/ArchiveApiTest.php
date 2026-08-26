@@ -11,6 +11,7 @@ use Kryption\MediaHub\Contracts\AccessPolicy;
 use Kryption\MediaHub\Contracts\MediaScope;
 use Kryption\MediaHub\Models\Media;
 use Kryption\MediaHub\Models\MediaFolder;
+use Kryption\MediaHub\Support\ServerRuntime;
 use Kryption\MediaHub\Tests\Fixtures\ZipReader;
 use Kryption\MediaHub\Tests\TestCase;
 
@@ -70,6 +71,11 @@ class ArchiveApiTest extends TestCase
     protected function tearDown(): void
     {
         $this->app['files']->deleteDirectory($this->root());
+
+        /* ⚠️ ARMING THE TIMER LEAVES IT ARMED. A bench that sets thirty seconds and walks away
+         * has armed it for every test that follows, and the suite then dies somewhere else
+         * entirely — which reads as a flaky test rather than as this one. */
+        ini_set('max_execution_time', '0');
 
         parent::tearDown();
     }
@@ -422,6 +428,50 @@ class ArchiveApiTest extends TestCase
         $this->refuseDownloads();
 
         $this->getJson('/media/'.$media->uuid)->assertOk();
+    }
+
+    // ── The time the stream gives itself ─────────────────────────────────────
+
+    /**
+     * ⚠️ WAITING ON STORAGE DOES NOT COUNT AGAINST `max_execution_time`, BUT COMPRESSING DOES.
+     * Measured: a script blocked on a pipe outlived a two-second limit by fifteen, while the
+     * same limit killed a busy loop at 2.1. So deflating a few gigabytes is exactly the kind of
+     * work that reaches the limit — and it reaches it after the 200 and the first bytes have
+     * gone, which is the truncated archive this whole action exists to avoid.
+     *
+     * ⚠️ AND IT IS OBSERVABLE, which is why this is a bench rather than a comment.
+     * `set_time_limit(0)` moves `max_execution_time` to zero, so what the stream did to its own
+     * runtime can simply be read back afterwards.
+     */
+    public function test_the_stream_buys_itself_the_time_to_finish(): void
+    {
+        $media = $this->media();
+
+        ini_set('max_execution_time', '30');
+
+        $this->archive(['media' => [$media->uuid]]);
+
+        $this->assertSame('0', ini_get('max_execution_time'));
+    }
+
+    /**
+     * ⚠️ AND WHERE IT CANNOT, IT DOES NOT PRETEND TO. `disable_functions` taking `set_time_limit`
+     * away is ordinary on shared hosting. What matters is that the health report and the stream
+     * read the same answer from the same place: a report promising the limit is lifted, beside a
+     * stream that silently could not, sends somebody looking for the fault everywhere except
+     * where it is.
+     */
+    public function test_it_does_not_lift_a_limit_it_was_told_it_cannot(): void
+    {
+        $this->app->instance(ServerRuntime::class, new ServerRuntime(PHP_SAPI, false));
+
+        $media = $this->media();
+
+        ini_set('max_execution_time', '30');
+
+        $this->archive(['media' => [$media->uuid]]);
+
+        $this->assertSame('30', ini_get('max_execution_time'));
     }
 
     private function refuseDownloads(): void

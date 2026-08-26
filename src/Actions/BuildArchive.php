@@ -14,6 +14,7 @@ use Kryption\MediaHub\Models\MediaFolder;
 use Kryption\MediaHub\Support\ArchiveCapacity;
 use Kryption\MediaHub\Support\FolderTree;
 use Kryption\MediaHub\Support\RuntimeLimits;
+use Kryption\MediaHub\Support\ServerRuntime;
 use Kryption\MediaHub\ValueObjects\ResolvedItems;
 use ZipStream\CompressionMethod;
 use ZipStream\ZipStream;
@@ -56,6 +57,7 @@ final class BuildArchive
         private readonly Config $config,
         private readonly ArchiveCapacity $capacity,
         private readonly RuntimeLimits $limits,
+        private readonly ServerRuntime $runtime,
     ) {
     }
 
@@ -298,14 +300,15 @@ final class BuildArchive
         }
 
         /*
-         * ⚠️ AND WHAT THE CONFIGURATION PERMITS IS NOT WHAT THIS MACHINE CAN FINISH. The two
-         * things that really cut a long download — PHP-FPM's `request_terminate_timeout` and the
-         * front-end server's proxy timeout — cannot be read from inside the process, so the
-         * package works from a budget the host declares and, failing that, a modest assumption.
+         * ⚠️ AND WHAT THE CONFIGURATION PERMITS IS NOT WHAT THIS MACHINE CAN FINISH. What really
+         * cuts a long download is set outside the process — by the pool manager, the front-end
+         * server or a CDN, and by a different setting under each — so it cannot be read from in
+         * here. The package works from a budget the host declares and, failing that, a modest
+         * assumption; the health report names the setting that applies to this runtime.
          *
          * ⚠️ A SEPARATE REASON FROM "TOO LARGE", because they call for different actions. One
          * says the selection exceeds a policy somebody chose; this one says the policy exceeds
-         * the machine, and the fix is in `php-fpm.conf` rather than in the selection.
+         * the machine, and the fix is in the server's configuration rather than in the selection.
          *
          * ⚠️ AND IT IS A REFUSAL RATHER THAN A BEST EFFORT. Past this point the 200 is gone: an
          * archive cut off halfway downloads, opens, and is missing files, with nothing anywhere
@@ -347,7 +350,10 @@ final class BuildArchive
      */
     private function clearTheWay(): void
     {
-        if ($this->limits->canCall('set_time_limit')) {
+        /* ⚠️ THE SAME ANSWER THE HEALTH REPORT GIVES, from the same place. A report promising
+         * the limit is lifted, beside a stream that silently could not, sends somebody looking
+         * for the fault everywhere except where it is. */
+        if ($this->runtime->canLiftTheTimeLimit()) {
             @set_time_limit(0);
         }
 
